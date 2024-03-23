@@ -47,7 +47,7 @@ func main() {
 	}
 
 	// Запускаем http-сервер
-	http.StartServer(flagSet.HttpServer, ctx)
+	http.StartServer(flagSet.Gitsync, ctx)
 
 	// Запускаем периодическую синхронизацию в отдельной горутине
 	go gitSync.Start()
