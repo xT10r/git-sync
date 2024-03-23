@@ -1,0 +1,7 @@
+*.iml
+.idea
+*.bak
+.vscode/**/*
+.vscode/launch.json
+logic.md
+Dockerfile.example
