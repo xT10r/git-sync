@@ -15,24 +15,20 @@
 package webhook
 
 import (
+	"fmt"
 	"net/http"
 )
 
+// Канал для вебхука
+var WebhookCh = make(chan bool)
+
 // TODO: Запуск сервера будет выполняться в пакете http. Нужно тут оставить Handle
-func Start() {
 
-	http.HandleFunc("/hook", handler)
-
-	http.ListenAndServe(":8080", nil)
-}
-
-func handler(w http.ResponseWriter, r *http.Request) {
-
-	// Проверка и валидация запроса
-
-	// Парсинг данных вебхука
-
-	// Вызов метода pull из пакета git
-
-	w.WriteHeader(200)
+// WebhookHandlerFunc обрабатывает запросы по вебхуку
+func WebhookHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	// Отправляем сигнал о получении вебхука
+	WebhookCh <- true
+	// Возвращаем успешный статус выполнения
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Синхронизация запущена по вебхуку")
 }

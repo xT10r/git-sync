@@ -21,6 +21,7 @@ import (
 	"git-sync/internal/constants"
 	"git-sync/internal/metrics"
 	"git-sync/logger"
+	"git-sync/webhook"
 	"net/http"
 	"sort"
 
@@ -97,29 +98,37 @@ func rootHandlerFunc(w http.ResponseWriter, r *http.Request) {
 func StartServer(f *flag.FlagSet, ctx context.Context) {
 
 	addr := f.Lookup(constants.FlagHttpServerAddr).Value.(flag.Getter).Get().(string)
-	if len(addr) == 0 {
-		logger.GetLogger().Printf("HTTP-сервер не запущен")
-		return
-	} else {
-		logger.GetLogger().Printf("HTTP-сервер запущен [http://%s]", addr)
-	}
-
 	basicUsername := f.Lookup(constants.FlagHttpServerAuthUsername).Value.(flag.Getter).Get().(string)
 	basicPassword := f.Lookup(constants.FlagHttpServerAuthPassword).Value.(flag.Getter).Get().(string)
 	bearerToken := f.Lookup(constants.FlagHttpServerAuthToken).Value.(flag.Getter).Get().(string)
 
-	chain := alice.New()
+	useBasicAuth := basicUsername != "" && basicPassword != ""
+	useBaererToken := len(bearerToken) > 0
 
-	if basicUsername != "" && basicPassword != "" {
-		chain = chain.Append(basicAuthMiddleware(basicUsername, basicPassword))
+	if len(addr) == 0 {
+		logger.GetLogger().Printf("HTTP-сервер: не запущен")
+		return
+	} else {
+		logger.GetLogger().Printf("HTTP-сервер: http://%s", addr)
 	}
 
-	if bearerToken != "" {
+	chain := alice.New()
+
+	if useBasicAuth {
+		chain = chain.Append(basicAuthMiddleware(basicUsername, basicPassword))
+		logger.GetLogger().Printf("HTTP-сервер: используется базовая аутентификация")
+	}
+
+	if useBaererToken {
 		chain = chain.Append(bearerAuthMiddleware(bearerToken))
+		logger.GetLogger().Printf("HTTP-сервер: используется аутентификация по токену")
 	}
 
 	// аутентификация используется только для отдельных хэндлеров
 	registerHandler("/metrics", chain.Then(metrics.MetricsHandler()), nil)
+
+	// Вебхук для ручной синхронизации
+	registerHandler("/webhook", http.HandlerFunc(webhook.WebhookHandlerFunc), nil)
 
 	// Основной хендлер
 	registerHandler("/", nil, rootHandlerFunc)

@@ -21,6 +21,7 @@ import (
 	"git-sync/internal/constants"
 	"git-sync/internal/metrics"
 	"git-sync/logger"
+	"git-sync/webhook"
 	"sync"
 	"time"
 )
@@ -66,38 +67,48 @@ func (gitsync *GitSync) Start() {
 			logger.GetLogger().Printf("%s", "Завершение синхронизации")
 			return
 
+		case <-webhook.WebhookCh:
+			// Синхронизация по вебхуку
+			_ = gitsync.sync()
+			logger.GetLogger().Printf("Синхронизация по вебхуку")
+
 		case <-ticker.C:
-
-			// Синхронизация локального репозитория
-			err := gitsync.git.SyncRepository()
-			if err != nil {
-				logger.GetLogger().Printf("Ошибка синхронизации: %v", err)
-				metrics.SyncTotalErrorCount.Inc()
-			}
-
-			// Получаем текущий коммит
-			commit, err := gitsync.git.GetCurrentCommit()
-			if err != nil {
-				logger.GetLogger().Printf("%s", err)
-			} else {
-				metrics.UpdateCommitInfo(commit)
-			}
-
-			// Увеличиваем счетчик с общим количеством синхронизаций
-			metrics.SyncTotalCount.Inc()
-
-			// Обновляем метрику с информацией о синхронизируемом репозитории
-			metrics.UpdateSyncRepoInfo(gitsync.git.Options)
-
-			if gitsync.git.GetChangesFlag() {
-				// Увеличиваем счетчик синхронизаций с изменениями
-				metrics.SyncCount.Inc()
-			}
-
+			// Синхронизация
+			_ = gitsync.sync()
 		}
 	}
 }
 
-func (gs *GitSync) Stop() error {
+func (gitsync *GitSync) sync() error {
+	// Синхронизация локального репозитория
+	err := gitsync.git.SyncRepository()
+	if err != nil {
+		logger.GetLogger().Printf("Ошибка синхронизации: %v", err)
+		metrics.SyncTotalErrorCount.Inc()
+	}
+
+	// Получаем текущий коммит
+	commit, err := gitsync.git.GetCurrentCommit()
+	if err != nil {
+		logger.GetLogger().Printf("%s", err)
+	} else {
+		metrics.UpdateCommitInfo(commit)
+	}
+
+	// Увеличиваем счетчик с общим количеством синхронизаций
+	metrics.SyncTotalCount.Inc()
+
+	// Обновляем метрику с информацией о синхронизируемом репозитории
+	metrics.UpdateSyncRepoInfo(gitsync.git.Options)
+
+	if gitsync.git.GetChangesFlag() {
+		// Увеличиваем счетчик синхронизаций с изменениями
+		metrics.SyncCount.Inc()
+	}
+
+	return nil
+}
+
+func (gitsync *GitSync) Stop() error {
 	return nil
 }

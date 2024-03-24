@@ -40,7 +40,7 @@ func Init(level string) {
 
 // Возвращает глобальный логгер
 func GetLogger() *log.Logger {
-	Init("info")
+	Init("info") // TODO: реализовать изменение типа логгирования
 	return logger
 }
 
