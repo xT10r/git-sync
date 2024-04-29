@@ -71,7 +71,6 @@ func (gitsync *GitSync) Start() {
 		case <-webhook.WebhookCh:
 			// Синхронизация по вебхуку
 			_ = gitsync.sync()
-			logger.GetLogger().Info("Синхронизация по вебхуку\n")
 
 		case <-ticker.C:
 			// Синхронизация
