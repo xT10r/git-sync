@@ -534,7 +534,8 @@ func (gitRepo *GitRepository) showCommitMessage() error {
 	authorEmail := gitRepo.currentCommit.Email
 
 	// Вывод информации о коммите в лог
-	logger.GetLogger().Printf("%s %s %s (%s) %s %s\n", reason, commitHash, authorName, authorEmail, commitDate, commitMessage)
+	logMessage := fmt.Sprintf("%s %s %s (%s) %s %s\n", reason, commitHash, authorName, authorEmail, commitDate, commitMessage)
+	logger.GetLogger().Info(logMessage)
 
 	return nil
 

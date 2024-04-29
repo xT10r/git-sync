@@ -25,6 +25,7 @@ import (
 	"git-sync/internal/flags"
 	"git-sync/internal/gitsync"
 	"git-sync/internal/http"
+	"git-sync/logger"
 	"os"
 	"os/signal"
 
@@ -70,5 +71,5 @@ func waitForSignals(cancel context.CancelFunc) {
 
 	// Ожидаем сигналы
 	sig := <-signalChan
-	fmt.Printf("Получен сигнал %s. Завершение программы...\n", sig)
+	logger.GetLogger().Print("Получен сигнал %s. Завершение программы...\n", sig)
 }

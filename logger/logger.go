@@ -19,31 +19,105 @@ import (
 	"os"
 )
 
-var logger *log.Logger
+type Logger struct {
+	logger *log.Logger
+	level  Level
+}
 
-// Инициализирует глобальный логгер
-func Init(level string) {
+type Level int64
 
-	switch level {
-	case "debug":
-		logger = log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)
-	case "info":
-		logger = log.New(os.Stdout, "", log.LstdFlags|log.Ltime)
-	case "warn":
-		logger = log.New(os.Stdout, "", log.LstdFlags|log.Llongfile|log.Ltime)
-	case "error":
-		logger = log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile|log.Ltime)
-	default:
-		logger = log.New(os.Stdout, "", log.LstdFlags|log.Ltime)
+const (
+	Info Level = iota
+	Warning
+	Debug
+	Error
+)
+
+const (
+	InfoPrefix    = "[INFO] "
+	DebugPrefix   = "[DEBUG] "
+	WarningPrefix = "[WARN] "
+	ErrorPrefix   = "[ERROR] "
+)
+
+var globalLogger *Logger
+
+var (
+	defaultFlags = log.LstdFlags | log.Lshortfile | log.Ltime
+)
+
+func InitLogeer(level Level, prefix string) {
+	globalLogger = NewLogger(level, prefix)
+}
+
+func NewLogger(level Level, specialPrefix string) *Logger {
+
+	var prefix string
+	if specialPrefix == "" {
+		switch level {
+		case Info:
+			prefix = InfoPrefix
+		case Debug:
+			prefix = DebugPrefix
+		case Warning:
+			prefix = WarningPrefix
+		case Error:
+			prefix = ErrorPrefix
+		}
+	}
+
+	return &Logger{
+		logger: log.New(os.Stdout, prefix, defaultFlags),
+		level:  level,
 	}
 }
 
-// Возвращает глобальный логгер
-func GetLogger() *log.Logger {
-	Init("info") // TODO: реализовать изменение типа логгирования
-	return logger
+func GetLogger() *Logger {
+	if globalLogger == nil {
+		InitLogeer(Info, "")
+	}
+	return globalLogger
 }
 
-func Print(message string) {
-	logger.Println(message)
+func (l *Logger) SetLevel(level Level) {
+	l.level = level
+}
+
+func (l *Logger) Print(format string, v ...interface{}) {
+	switch l.level {
+	case Debug:
+		if Debug >= l.level {
+			l.logger.Printf(format, v...)
+		}
+	case Info:
+		if Info >= l.level {
+			l.logger.Printf(format, v...)
+		}
+	case Warning:
+		if Warning >= l.level {
+			l.logger.Printf(format, v...)
+		}
+	case Error:
+		if Error >= l.level {
+			l.logger.Printf(format, v...)
+		}
+	}
+}
+
+func (l *Logger) Info(message string) {
+	if l.level <= Info {
+		l.logger.Printf("%s%s\n", InfoPrefix, message)
+	}
+}
+
+func (l *Logger) Warning(message string) {
+	if l.level <= Warning {
+		l.logger.Printf("%s%s\n", WarningPrefix, message)
+	}
+}
+
+func (l *Logger) Error(message string) {
+	if l.level <= Error {
+		l.logger.Printf("%s%s\n", ErrorPrefix, message)
+	}
 }

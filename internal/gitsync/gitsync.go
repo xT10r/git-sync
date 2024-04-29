@@ -17,6 +17,7 @@ package gitsync
 import (
 	"context"
 	"flag"
+	"fmt"
 	"git-sync/git"
 	"git-sync/internal/constants"
 	"git-sync/internal/metrics"
@@ -53,7 +54,7 @@ func NewGitSync(f *flag.FlagSet, ctx context.Context) (*GitSync, error) {
 
 func (gitsync *GitSync) Start() {
 
-	logger.GetLogger().Printf("%s", "Начало синхронизации")
+	logger.GetLogger().Info("Начало синхронизации\n")
 
 	// Создаем тикер для периодической синхронизации
 	ticker := time.NewTicker(gitsync.interval)
@@ -64,13 +65,13 @@ func (gitsync *GitSync) Start() {
 
 		case <-gitsync.ctx.Done():
 			// Контекст отменен, выходим
-			logger.GetLogger().Printf("%s", "Завершение синхронизации")
+			logger.GetLogger().Info("Завершение синхронизации\n")
 			return
 
 		case <-webhook.WebhookCh:
 			// Синхронизация по вебхуку
 			_ = gitsync.sync()
-			logger.GetLogger().Printf("Синхронизация по вебхуку")
+			logger.GetLogger().Info("Синхронизация по вебхуку\n")
 
 		case <-ticker.C:
 			// Синхронизация
@@ -83,14 +84,14 @@ func (gitsync *GitSync) sync() error {
 	// Синхронизация локального репозитория
 	err := gitsync.git.SyncRepository()
 	if err != nil {
-		logger.GetLogger().Printf("Ошибка синхронизации: %v", err)
+		logger.GetLogger().Error(fmt.Sprintf("Ошибка синхронизации: %v", err))
 		metrics.SyncTotalErrorCount.Inc()
 	}
 
 	// Получаем текущий коммит
 	commit, err := gitsync.git.GetCurrentCommit()
 	if err != nil {
-		logger.GetLogger().Printf("%s", err)
+		logger.GetLogger().Error(fmt.Sprintf("%s\n", err))
 	} else {
 		metrics.UpdateCommitInfo(commit)
 	}

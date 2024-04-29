@@ -15,7 +15,6 @@
 package flags
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"git-sync/internal/constants"
@@ -35,16 +34,19 @@ type ConsoleFlags struct {
 
 // NewConsoleFlags создает новый набор флагов командной строки.
 func NewConsoleFlags() *ConsoleFlags {
-	flags, err := ParseFlags()
+	flags, err := parseFlags()
 	if err != nil {
-		logger.GetLogger().Fatal(err)
+		logger.GetLogger().Print("%v", err)
 		return nil
 	}
-	return flags
+
+	return &ConsoleFlags{
+		Gitsync: flags,
+	}
 }
 
 // ParseFlags инициализирует флаги с помощью набора флагов командной строки.
-func ParseFlags() (*ConsoleFlags, error) {
+func parseFlags() (*flag.FlagSet, error) {
 
 	gitSyncFlagSet := flag.NewFlagSet("git-sync", flag.ExitOnError)
 	localPath := gitSyncFlagSet.String(constants.FlagLocalPath, getEnv(constants.EnvLocalPath, ""), fmt.Sprintf("Путь к локальному репозиторию (%s)", constants.EnvLocalPath))
@@ -72,15 +74,15 @@ func ParseFlags() (*ConsoleFlags, error) {
 	}
 
 	if *repoBranch == "" {
-		fmt.Printf("Branch is not set\n")
+		logger.GetLogger().Warning("Branch is not set\n")
 	}
 
 	if *repoAuthUser == "" {
-		fmt.Printf("User is not set\n")
+		logger.GetLogger().Warning("User is not set\n")
 	}
 
 	if *repoAuthToken == "" {
-		fmt.Printf("Token is not set\n")
+		logger.GetLogger().Warning("Token is not set\n")
 	}
 
 	if *httpServerAddr != "" {
@@ -101,9 +103,7 @@ func ParseFlags() (*ConsoleFlags, error) {
 		// проверка токена
 	}
 
-	return &ConsoleFlags{
-		Gitsync: gitSyncFlagSet,
-	}, nil
+	return gitSyncFlagSet, nil
 }
 
 // getEnv возвращает значение переменной окружения или значение по умолчанию, если переменная не установлена.
@@ -154,19 +154,19 @@ func validateServerAddress(addr string) error {
 	// Разделение адреса на IP и порт
 	parts := strings.Split(addr, ":")
 	if len(parts) != 2 {
-		return errors.New("адрес должен быть в формате IP:PORT")
+		return fmt.Errorf("адрес должен быть в формате IP:PORT")
 	}
 
 	// Проверка корректности IP адреса
 	ip := net.ParseIP(parts[0])
 	if ip == nil {
-		return errors.New("некорректный IP адрес")
+		return fmt.Errorf("некорректный IP адрес")
 	}
 
 	// Проверка корректности порта
 	port, err := strconv.Atoi(parts[1])
 	if err != nil || port < 1 || port > 65535 {
-		return errors.New("некорректный порт. Допустимый диапазон портов [1-65535]")
+		return fmt.Errorf("некорректный порт. Допустимый диапазон портов [1-65535]")
 	}
 
 	return nil
