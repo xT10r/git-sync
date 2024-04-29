@@ -15,20 +15,38 @@
 package webhook
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // Канал для вебхука
 var WebhookCh = make(chan bool)
 
-// TODO: Запуск сервера будет выполняться в пакете http. Нужно тут оставить Handle
-
 // WebhookHandlerFunc обрабатывает запросы по вебхуку
 func WebhookHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	// Отправляем сигнал о получении вебхука
 	WebhookCh <- true
+
+	// Формируем JSON-структуру с сообщением и временем
+	response := struct {
+		Message string    `json:"message"`
+		Time    time.Time `json:"time"`
+	}{
+		Message: "Синхронизация запущена по вебхуку",
+		Time:    time.Now(),
+	}
+
+	// Кодируем JSON-структуру в ответ и отправляем
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 	// Возвращаем успешный статус выполнения
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Синхронизация запущена по вебхуку")
+	err := json.NewEncoder(w).Encode(response)
+	if err != nil {
+		// В случае ошибки кодируем сообщение об ошибке в текстовом формате
+		http.Error(w, fmt.Sprintf("Ошибка кодирования JSON: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
