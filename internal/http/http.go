@@ -42,6 +42,10 @@ func registerHandler(path string, handler http.Handler, handlerFunc http.Handler
 	} else {
 		panic("registerHandler: не передан хэндлер или функция хэндлера")
 	}
+
+	if path == "/" {
+		delete(registeredPaths, "/")
+	}
 }
 
 func basicAuthMiddleware(username, password string) alice.Constructor {
@@ -124,13 +128,8 @@ func StartServer(f *flag.FlagSet, ctx context.Context) {
 		logger.GetLogger().Info("HTTP-сервер: используется аутентификация по токену")
 	}
 
-	// аутентификация используется только для отдельных хэндлеров
 	registerHandler("/metrics", chain.Then(metrics.MetricsHandler()), nil)
-
-	// Вебхук для ручной синхронизации
 	registerHandler("/webhook", http.HandlerFunc(webhook.WebhookHandlerFunc), nil)
-
-	// Основной хендлер
 	registerHandler("/", nil, rootHandlerFunc)
 
 	go func() {
