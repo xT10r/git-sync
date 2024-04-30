@@ -110,22 +110,22 @@ func StartServer(f *flag.FlagSet, ctx context.Context) {
 	useBaererToken := len(bearerToken) > 0
 
 	if len(addr) == 0 {
-		logger.GetLogger().Info("HTTP-сервер: не запущен")
+		logger.GetLogger().Info("HTTP-сервер: не запущен\n")
 		return
 	} else {
-		logger.GetLogger().Info(fmt.Sprintf("HTTP-сервер: http://%s", addr))
+		logger.GetLogger().Info("HTTP-сервер: http://%s", addr)
 	}
 
 	chain := alice.New()
 
 	if useBasicAuth {
 		chain = chain.Append(basicAuthMiddleware(basicUsername, basicPassword))
-		logger.GetLogger().Info("HTTP-сервер: используется базовая аутентификация")
+		logger.GetLogger().Info("HTTP-сервер: используется базовая аутентификация\n")
 	}
 
 	if useBaererToken {
 		chain = chain.Append(bearerAuthMiddleware(bearerToken))
-		logger.GetLogger().Info("HTTP-сервер: используется аутентификация по токену")
+		logger.GetLogger().Info("HTTP-сервер: используется аутентификация по токену\n")
 	}
 
 	registerHandler("/metrics", chain.Then(metrics.MetricsHandler()), nil)

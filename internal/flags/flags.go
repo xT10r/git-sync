@@ -36,7 +36,7 @@ type ConsoleFlags struct {
 func NewConsoleFlags() *ConsoleFlags {
 	flags, err := parseFlags()
 	if err != nil {
-		logger.GetLogger().Print("%v", err)
+		logger.GetLogger().Error("%v", err)
 		return nil
 	}
 

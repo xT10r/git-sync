@@ -17,7 +17,6 @@ package gitsync
 import (
 	"context"
 	"flag"
-	"fmt"
 	"git-sync/git"
 	"git-sync/internal/constants"
 	"git-sync/internal/metrics"
@@ -68,9 +67,10 @@ func (gitsync *GitSync) Start() {
 			logger.GetLogger().Info("Завершение синхронизации\n")
 			return
 
-		case <-webhook.WebhookCh:
+		case ip := <-webhook.WebhookCh:
 			// Синхронизация по вебхуку
 			_ = gitsync.sync()
+			logger.GetLogger().Info("Синхронизации по вебхуку (client ip: %s)\n", ip)
 
 		case <-ticker.C:
 			// Синхронизация
@@ -83,14 +83,14 @@ func (gitsync *GitSync) sync() error {
 	// Синхронизация локального репозитория
 	err := gitsync.git.SyncRepository()
 	if err != nil {
-		logger.GetLogger().Error(fmt.Sprintf("Ошибка синхронизации: %v", err))
+		logger.GetLogger().Error("Ошибка синхронизации: %v", err)
 		metrics.SyncTotalErrorCount.Inc()
 	}
 
 	// Получаем текущий коммит
 	commit, err := gitsync.git.GetCurrentCommit()
 	if err != nil {
-		logger.GetLogger().Error(fmt.Sprintf("%s\n", err))
+		logger.GetLogger().Error("%v\n", err)
 	} else {
 		metrics.UpdateCommitInfo(commit)
 	}

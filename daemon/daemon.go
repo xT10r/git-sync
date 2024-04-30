@@ -15,7 +15,6 @@
 package daemon
 
 import (
-	"fmt"
 	"git-sync/logger"
 
 	"github.com/sevlyar/go-daemon"
@@ -35,7 +34,7 @@ func Start() {
 
 	d, err := cntxt.Reborn()
 	if err != nil {
-		logger.GetLogger().Error(fmt.Sprintf("%v", err))
+		logger.GetLogger().Error("%v\n", err)
 	}
 	if d != nil {
 		return

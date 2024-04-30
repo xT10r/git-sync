@@ -21,103 +21,61 @@ import (
 
 type Logger struct {
 	logger *log.Logger
-	level  Level
 }
 
-type Level int64
-
 const (
-	Info Level = iota
-	Warning
-	Debug
-	Error
+	infoPrefix    string = "[INFO] "
+	debugPrefix   string = "[DEBUG] "
+	warningPrefix string = "[WARN] "
+	errorPrefix   string = "[ERROR] "
 )
 
-const (
-	InfoPrefix    = "[INFO] "
-	DebugPrefix   = "[DEBUG] "
-	WarningPrefix = "[WARN] "
-	ErrorPrefix   = "[ERROR] "
+var (
+	logger *Logger
 )
-
-var globalLogger *Logger
 
 var (
 	defaultFlags = log.LstdFlags | log.Lshortfile | log.Ltime
 )
 
-func InitLogeer(level Level, prefix string) {
-	globalLogger = NewLogger(level, prefix)
-}
-
-func NewLogger(level Level, specialPrefix string) *Logger {
-
-	var prefix string
-	if specialPrefix == "" {
-		switch level {
-		case Info:
-			prefix = InfoPrefix
-		case Debug:
-			prefix = DebugPrefix
-		case Warning:
-			prefix = WarningPrefix
-		case Error:
-			prefix = ErrorPrefix
-		}
-	}
+func NewLogger() *Logger {
 
 	return &Logger{
-		logger: log.New(os.Stdout, prefix, defaultFlags),
-		level:  level,
+		logger: log.New(os.Stdout, "", defaultFlags),
 	}
 }
 
 func GetLogger() *Logger {
-	if globalLogger == nil {
-		InitLogeer(Info, "")
+	if logger == nil {
+		logger = NewLogger()
 	}
-	return globalLogger
+	return logger
 }
 
-func (l *Logger) SetLevel(level Level) {
-	l.level = level
+func (l *Logger) Info(format string, v ...interface{}) {
+	curPrefix := l.logger.Prefix()
+	l.logger.SetPrefix(infoPrefix)
+	defer l.logger.SetPrefix(curPrefix)
+	l.logger.Printf(format, v...)
 }
 
-func (l *Logger) Print(format string, v ...interface{}) {
-	switch l.level {
-	case Debug:
-		if Debug >= l.level {
-			l.logger.Printf(format, v...)
-		}
-	case Info:
-		if Info >= l.level {
-			l.logger.Printf(format, v...)
-		}
-	case Warning:
-		if Warning >= l.level {
-			l.logger.Printf(format, v...)
-		}
-	case Error:
-		if Error >= l.level {
-			l.logger.Printf(format, v...)
-		}
-	}
+func (l *Logger) Debug(format string, v ...interface{}) {
+	curPrefix := l.logger.Prefix()
+	l.logger.SetPrefix(debugPrefix)
+	defer l.logger.SetPrefix(curPrefix)
+	l.logger.Printf(format, v...)
 }
 
-func (l *Logger) Info(message string) {
-	if l.level <= Info {
-		l.logger.Printf("%s%s\n", InfoPrefix, message)
-	}
+func (l *Logger) Warning(format string, v ...interface{}) {
+	curPrefix := l.logger.Prefix()
+	l.logger.SetPrefix(warningPrefix)
+	defer l.logger.SetPrefix(curPrefix)
+	l.logger.Printf(format, v...)
 }
 
-func (l *Logger) Warning(message string) {
-	if l.level <= Warning {
-		l.logger.Printf("%s%s\n", WarningPrefix, message)
-	}
-}
-
-func (l *Logger) Error(message string) {
-	if l.level <= Error {
-		l.logger.Printf("%s%s\n", ErrorPrefix, message)
-	}
+func (l *Logger) Error(format string, v ...interface{}) {
+	curPrefix := l.logger.Prefix()
+	l.logger.SetPrefix(errorPrefix)
+	defer l.logger.SetPrefix(curPrefix)
+	l.logger.Printf(format, v...)
 }

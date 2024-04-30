@@ -71,5 +71,5 @@ func waitForSignals(cancel context.CancelFunc) {
 
 	// Ожидаем сигналы
 	sig := <-signalChan
-	logger.GetLogger().Print("Получен сигнал %s. Завершение программы...\n", sig)
+	logger.GetLogger().Info("Получен сигнал %s. Завершение программы...\n", sig)
 }

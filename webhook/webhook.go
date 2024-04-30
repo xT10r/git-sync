@@ -22,12 +22,16 @@ import (
 )
 
 // Канал для вебхука
-var WebhookCh = make(chan bool)
+var WebhookCh = make(chan string)
 
 // WebhookHandlerFunc обрабатывает запросы по вебхуку
 func WebhookHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	// Отправляем сигнал о получении вебхука
-	WebhookCh <- true
+
+	// Получаем IP-адрес клиента из запроса
+	ipAddress := r.RemoteAddr
+
+	// Отправляем сигнал о получении вебхука и IP-адрес клиента в канал
+	WebhookCh <- ipAddress
 
 	// Формируем JSON-структуру с сообщением и временем
 	response := struct {
