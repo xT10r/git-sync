@@ -48,18 +48,18 @@ func NewConsoleFlags() *ConsoleFlags {
 // ParseFlags инициализирует флаги с помощью набора флагов командной строки.
 func parseFlags() (*flag.FlagSet, error) {
 
-	gitSyncFlagSet := flag.NewFlagSet("git-sync", flag.ExitOnError)
-	localPath := gitSyncFlagSet.String(constants.FlagLocalPath, getEnv(constants.EnvLocalPath, ""), fmt.Sprintf("Путь к локальному репозиторию (%s)", constants.EnvLocalPath))
-	repoUrl := gitSyncFlagSet.String(constants.FlagRepoUrl, getEnv(constants.EnvRepoUrl, ""), fmt.Sprintf("URL удаленного репозитория (%s)", constants.EnvRepoUrl))
-	repoBranch := gitSyncFlagSet.String(constants.FlagRepoBranch, getEnv(constants.EnvRepoBranch, ""), fmt.Sprintf("Ветка удаленного репозитория (%s)", constants.EnvRepoBranch))
-	repoAuthUser := gitSyncFlagSet.String(constants.FlagRepoAuthUser, getEnv(constants.EnvRepoAuthUser, ""), fmt.Sprintf("Учетная запись (%s)", constants.EnvRepoAuthUser))
-	repoAuthToken := gitSyncFlagSet.String(constants.FlagRepoAuthToken, getEnv(constants.EnvRepoAuthToken, ""), fmt.Sprintf("Токен авторизации (%s)", constants.EnvRepoAuthToken))
-	syncInterval := gitSyncFlagSet.Duration(constants.FlagSyncInterval, getEnvDuration(constants.EnvSyncInterval, 30*time.Second), fmt.Sprintf("Интервал обновления репозитория (%s)", constants.EnvSyncInterval))
-	httpServerAddr := gitSyncFlagSet.String(constants.FlagHttpServerAddr, getEnv(constants.EnvHttpServerAddr, ""), fmt.Sprintf("Адрес http-сервера (+порт) (%s)", constants.EnvHttpServerAddr))
-	httpServerAuthUsername := gitSyncFlagSet.String(constants.FlagHttpServerAuthUsername, getEnv(constants.EnvHttpServerAuthUsername, ""), fmt.Sprintf("Имя пользователя http-сервера (%s)", constants.EnvHttpServerAuthUsername))
-	httpServerAuthPassword := gitSyncFlagSet.String(constants.FlagHttpServerAuthPassword, getEnv(constants.EnvHttpServerAuthPassword, ""), fmt.Sprintf("Пароль пользователя http-сервера (%s)", constants.EnvHttpServerAuthPassword))
-	httpServerAuthBaererToken := gitSyncFlagSet.String(constants.FlagHttpServerAuthToken, getEnv(constants.EnvHttpServerAuthBearerToken, ""), fmt.Sprintf("Baerer-токен http-сервера (%s)", constants.EnvHttpServerAuthBearerToken))
-	gitSyncFlagSet.Parse(os.Args[1:])
+	fs := flag.NewFlagSet("git-sync", flag.ExitOnError)
+	localPath := fs.String(constants.FlagLocalPath, getEnv(constants.EnvLocalPath, ""), fmt.Sprintf("Путь к локальному репозиторию (%s)", constants.EnvLocalPath))
+	repoUrl := fs.String(constants.FlagRepoUrl, getEnv(constants.EnvRepoUrl, ""), fmt.Sprintf("URL удаленного репозитория (%s)", constants.EnvRepoUrl))
+	repoBranch := fs.String(constants.FlagRepoBranch, getEnv(constants.EnvRepoBranch, ""), fmt.Sprintf("Ветка удаленного репозитория (%s)", constants.EnvRepoBranch))
+	repoAuthUser := fs.String(constants.FlagRepoAuthUser, getEnv(constants.EnvRepoAuthUser, ""), fmt.Sprintf("Учетная запись (%s)", constants.EnvRepoAuthUser))
+	repoAuthToken := fs.String(constants.FlagRepoAuthToken, getEnv(constants.EnvRepoAuthToken, ""), fmt.Sprintf("Токен авторизации (%s)", constants.EnvRepoAuthToken))
+	syncInterval := fs.Duration(constants.FlagSyncInterval, getEnvDuration(constants.EnvSyncInterval, 30*time.Second), fmt.Sprintf("Интервал обновления репозитория (%s)", constants.EnvSyncInterval))
+	httpServerAddr := fs.String(constants.FlagHttpServerAddr, getEnv(constants.EnvHttpServerAddr, ""), fmt.Sprintf("Адрес http-сервера (+порт) (%s)", constants.EnvHttpServerAddr))
+	httpServerAuthUsername := fs.String(constants.FlagHttpServerAuthUsername, getEnv(constants.EnvHttpServerAuthUsername, ""), fmt.Sprintf("Имя пользователя http-сервера (%s)", constants.EnvHttpServerAuthUsername))
+	httpServerAuthPassword := fs.String(constants.FlagHttpServerAuthPassword, getEnv(constants.EnvHttpServerAuthPassword, ""), fmt.Sprintf("Пароль пользователя http-сервера (%s)", constants.EnvHttpServerAuthPassword))
+	httpServerAuthBaererToken := fs.String(constants.FlagHttpServerAuthToken, getEnv(constants.EnvHttpServerAuthBearerToken, ""), fmt.Sprintf("Baerer-токен http-сервера (%s)", constants.EnvHttpServerAuthBearerToken))
+	fs.Parse(os.Args[1:])
 
 	if err := validateRemoteURL(*repoUrl); err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func parseFlags() (*flag.FlagSet, error) {
 		// проверка токена
 	}
 
-	return gitSyncFlagSet, nil
+	return fs, nil
 }
 
 // getEnv возвращает значение переменной окружения или значение по умолчанию, если переменная не установлена.
