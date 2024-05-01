@@ -25,6 +25,10 @@ import (
 
 func TestWebhookHandlerFunc(t *testing.T) {
 
+	defer func() {
+		close(handlers.WebhookCh) // Закрываем канал после отправки данных
+	}()
+
 	// Ждем некоторое время для запуска сервера.
 	time.Sleep(100 * time.Millisecond)
 

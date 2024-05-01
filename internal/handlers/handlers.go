@@ -42,9 +42,6 @@ func WebhookHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	ipAddress := r.RemoteAddr
 
 	// Отправляем сигнал о получении вебхука и IP-адрес клиента в канал
-	defer func() {
-		close(WebhookCh) // Закрываем канал после отправки данных
-	}()
 	WebhookCh <- ipAddress
 
 	// Формируем JSON-структуру с сообщением и временем

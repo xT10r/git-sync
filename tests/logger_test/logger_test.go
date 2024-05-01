@@ -37,7 +37,7 @@ type testCase struct {
 	Func           func(*logger.Logger, string) // Функция, которая будет выполнена в тесте
 }
 
-func runTest(t *testing.T, loggerFunc func(*logger.Logger, string), c testCase) {
+func runTest(t *testing.T, _ func(*logger.Logger, string), c testCase) {
 	mock := &mockLoggerCreator{}
 	logger := mock.NewLogger()
 
@@ -57,7 +57,6 @@ func runTest(t *testing.T, loggerFunc func(*logger.Logger, string), c testCase) 
 	if !strings.HasPrefix(output, c.ExpectedPrefix) {
 		t.Errorf("[%s] Expected prefix: %s, got: %s", c.Name, c.ExpectedPrefix, output[:len(c.ExpectedPrefix)])
 	}
-	t.Log(output)
 }
 
 func createTestCases() []testCase {
