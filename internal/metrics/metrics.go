@@ -17,11 +17,9 @@ package metrics
 import (
 	"fmt"
 	"git-sync/git"
-	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -65,10 +63,6 @@ func init() {
 	prometheus.MustRegister(SyncTotalCount)
 	prometheus.MustRegister(SyncTotalErrorCount)
 	prometheus.MustRegister(CommitInfo)
-}
-
-func MetricsHandler() http.Handler {
-	return promhttp.Handler()
 }
 
 func UpdateCommitInfo(gci *git.CommitInfo) {

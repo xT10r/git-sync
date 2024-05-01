@@ -19,9 +19,9 @@ import (
 	"flag"
 	"git-sync/git"
 	"git-sync/internal/constants"
+	"git-sync/internal/handlers"
 	"git-sync/internal/metrics"
 	"git-sync/logger"
-	"git-sync/webhook"
 	"sync"
 	"time"
 )
@@ -67,7 +67,7 @@ func (gitsync *GitSync) Start() {
 			logger.GetLogger().Info("Завершение синхронизации\n")
 			return
 
-		case ip := <-webhook.WebhookCh:
+		case ip := <-handlers.WebhookCh:
 			// Синхронизация по вебхуку
 			_ = gitsync.sync()
 			logger.GetLogger().Info("Синхронизации по вебхуку (client ip: %s)\n", ip)

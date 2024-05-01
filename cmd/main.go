@@ -38,7 +38,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// TODO: Изучить вопрос с пробросом имени в функцию NewConsoleFlags. А нужно ли?
 	flagSet := flags.NewConsoleFlags()
 	gitSync, err := gitsync.NewGitSync(flagSet.Gitsync, ctx)
 

@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     https://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,17 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package webhook
+package handlers
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Канал для вебхука
-var WebhookCh = make(chan string)
+var WebhookCh = make(chan string, 1)
+
+type WebhookResponse struct {
+	Message string    `json:"message"`
+	Time    time.Time `json:"time"`
+}
+
+func MetricsHandler() http.Handler {
+	return promhttp.Handler()
+}
 
 // WebhookHandlerFunc обрабатывает запросы по вебхуку
 func WebhookHandlerFunc(w http.ResponseWriter, r *http.Request) {
@@ -31,13 +42,13 @@ func WebhookHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	ipAddress := r.RemoteAddr
 
 	// Отправляем сигнал о получении вебхука и IP-адрес клиента в канал
+	defer func() {
+		close(WebhookCh) // Закрываем канал после отправки данных
+	}()
 	WebhookCh <- ipAddress
 
 	// Формируем JSON-структуру с сообщением и временем
-	response := struct {
-		Message string    `json:"message"`
-		Time    time.Time `json:"time"`
-	}{
+	response := &WebhookResponse{
 		Message: "Синхронизация запущена по вебхуку",
 		Time:    time.Now(),
 	}

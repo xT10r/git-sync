@@ -15,6 +15,7 @@
 package logger
 
 import (
+	"io"
 	"log"
 	"os"
 )
@@ -52,6 +53,27 @@ func GetLogger() *Logger {
 	return logger
 }
 
+func (l *Logger) GetInfoPrefix() string {
+	return infoPrefix
+}
+
+func (l *Logger) GetDebugPrefix() string {
+	return debugPrefix
+}
+
+func (l *Logger) GetWarnPrefix() string {
+	return warningPrefix
+}
+
+func (l *Logger) GetErrPrefix() string {
+	return errorPrefix
+}
+
+func (l *Logger) SetOutput(w io.Writer) {
+	l.logger.SetOutput(w)
+}
+
+// Info записывает сообщение с префиксом INFO в лог.
 func (l *Logger) Info(format string, v ...interface{}) {
 	curPrefix := l.logger.Prefix()
 	l.logger.SetPrefix(infoPrefix)
@@ -59,6 +81,7 @@ func (l *Logger) Info(format string, v ...interface{}) {
 	l.logger.Printf(format, v...)
 }
 
+// Debug записывает сообщение с префиксом DEBUG в лог.
 func (l *Logger) Debug(format string, v ...interface{}) {
 	curPrefix := l.logger.Prefix()
 	l.logger.SetPrefix(debugPrefix)
@@ -66,6 +89,7 @@ func (l *Logger) Debug(format string, v ...interface{}) {
 	l.logger.Printf(format, v...)
 }
 
+// Warning записывает сообщение с префиксом WARNING в лог.
 func (l *Logger) Warning(format string, v ...interface{}) {
 	curPrefix := l.logger.Prefix()
 	l.logger.SetPrefix(warningPrefix)
@@ -73,6 +97,7 @@ func (l *Logger) Warning(format string, v ...interface{}) {
 	l.logger.Printf(format, v...)
 }
 
+// Error записывает сообщение с префиксом ERROR в лог.
 func (l *Logger) Error(format string, v ...interface{}) {
 	curPrefix := l.logger.Prefix()
 	l.logger.SetPrefix(errorPrefix)

@@ -19,9 +19,8 @@ import (
 	"flag"
 	"fmt"
 	"git-sync/internal/constants"
-	"git-sync/internal/metrics"
+	"git-sync/internal/handlers"
 	"git-sync/logger"
-	"git-sync/webhook"
 	"net/http"
 	"sort"
 
@@ -128,8 +127,8 @@ func StartServer(f *flag.FlagSet, ctx context.Context) {
 		logger.GetLogger().Info("HTTP-сервер: используется аутентификация по токену\n")
 	}
 
-	registerHandler("/metrics", chain.Then(metrics.MetricsHandler()), nil)
-	registerHandler("/webhook", http.HandlerFunc(webhook.WebhookHandlerFunc), nil)
+	registerHandler("/metrics", chain.Then(handlers.MetricsHandler()), nil)
+	registerHandler("/webhook", http.HandlerFunc(handlers.WebhookHandlerFunc), nil)
 	registerHandler("/", nil, rootHandlerFunc)
 
 	go func() {
