@@ -5,3 +5,5 @@
 .vscode/launch.json
 logic.md
 Dockerfile.example
+.config/**/*
+internal/config/config.go

@@ -15,12 +15,16 @@
 package handlers_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"git-sync/internal/handlers"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/prometheus/common/expfmt"
 )
 
 func TestWebhookHandlerFunc(t *testing.T) {
@@ -71,5 +75,40 @@ func TestWebhookHandlerFunc(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Error("expected IP address was not sent to the channel")
+	}
+}
+
+func TestMetricsHandler(t *testing.T) {
+	req, err := http.NewRequest("GET", "/metrics", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := handlers.MetricsHandler()
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
+
+	body, err := io.ReadAll(rr.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Используем парсер метрик Prometheus для чтения метрик из тела ответа
+	parser := expfmt.TextParser{}
+	metricFamilies, err := parser.TextToMetricFamilies(bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Проверяем наличие нужной метрики в коллекции
+	expectedMetric := "go_info"
+	if _, ok := metricFamilies[expectedMetric]; !ok {
+		t.Errorf("handler response does not contain expected metric %q", expectedMetric)
 	}
 }
