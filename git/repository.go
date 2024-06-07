@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -37,59 +36,77 @@ const (
 
 type GitRepository struct {
 	mutex         sync.Mutex
-	Options       *GitRepositoryOptions
+	options       *GitRepositoryOptions
 	repository    *git.Repository
 	currentCommit *CommitInfo
 	hasChanges    bool
 }
 
-type GitRepositoryOptions struct {
-	url        string // URL удаленного репозитория
-	branch     string // Ветка репозитория
-	path       string // Путь до локального репозитория
-	user       string // Имя пользователя (для аутентификации)
-	token      string // Токен (для аутентификации)
-	originName string
-}
-
-type CommitInfo struct {
-	Hash    string
-	Date    time.Time
-	Message string
-	Author  string
-	Email   string
-	Reason  string
-	commit  *object.Commit
-	Changes []ChangeInfo
-}
-
-type ChangeInfo struct {
-	ChangeType string
-	FileName   string
-	FromHash   string
-	ToHash     string
-}
-
 // NewSyncOptions создает экземпляр SyncOptions с значениями по умолчанию.
-func NewGitRepository(f *flag.FlagSet) (*GitRepository, error) {
+func NewGitRepository(fs *flag.FlagSet) (*GitRepository, error) {
+
+	// Если flagSet не укзан, возвращаем ошибку
+	if fs == nil {
+		return nil, fmt.Errorf("FlagSet is nil")
+	}
+
+	// Функция для получения значения флага или ошибки
+	getFlagValue := func(name string) (string, error) {
+		f := fs.Lookup(name)
+		if f == nil {
+			return "", fmt.Errorf("флаг %s не определён", name)
+		}
+		// .Value.(flag.Getter).Get()
+		value := f.Value.(flag.Getter).Get().(string)
+		if value == "" {
+			return "", fmt.Errorf("флаг %s пустой", name)
+		}
+		return value, nil
+	}
+
+	url, err := getFlagValue(constants.FlagRepoUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	branch, err := getFlagValue(constants.FlagRepoBranch)
+	if err != nil {
+		return nil, err
+	}
+
+	path, err := getFlagValue(constants.FlagLocalPath)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := getFlagValue(constants.FlagRepoAuthUser)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := getFlagValue(constants.FlagRepoAuthToken)
+	if err != nil {
+		return nil, err
+	}
+
 	options := &GitRepositoryOptions{
-		url:        f.Lookup(constants.FlagRepoUrl).Value.(flag.Getter).Get().(string),
-		branch:     f.Lookup(constants.FlagRepoBranch).Value.(flag.Getter).Get().(string),
-		path:       f.Lookup(constants.FlagLocalPath).Value.(flag.Getter).Get().(string),
-		user:       f.Lookup(constants.FlagRepoAuthUser).Value.(flag.Getter).Get().(string),
-		token:      f.Lookup(constants.FlagRepoAuthToken).Value.(flag.Getter).Get().(string),
+		url:        url,
+		branch:     branch,
+		path:       path,
+		user:       user,
+		token:      token,
 		originName: "origin",
 	}
 
 	gitRepository := &GitRepository{
 		mutex:         sync.Mutex{},
-		Options:       options,
+		options:       options,
 		repository:    nil,
 		currentCommit: nil,
 	}
 
 	// Получаем репозиторий
-	err := gitRepository.cloneOpenRepo()
+	err = gitRepository.cloneOpenRepo()
 	if err != nil {
 		return nil, err
 	}
@@ -103,33 +120,8 @@ func NewGitRepository(f *flag.FlagSet) (*GitRepository, error) {
 	return gitRepository, nil
 }
 
-// NewCommitInfo создает новый объект CommitInfo на основе git.Commit.
-func NewCommitInfo(commit *object.Commit) *CommitInfo {
-
-	return &CommitInfo{
-		Hash:    commit.Hash.String(),
-		Date:    commit.Committer.When,
-		Message: strings.TrimSpace(commit.Message),
-		Author:  commit.Author.Name,
-		Email:   commit.Author.Email,
-		commit:  commit,
-		Changes: []ChangeInfo{},
-	}
-}
-
-// AddChange добавляет информацию об изменении файла в CommitInfo.
-func (ci *CommitInfo) AddChange(changeType, fileName, fromHash, toHash string) {
-	change := ChangeInfo{
-		ChangeType: changeType,
-		FileName:   fileName,
-		FromHash:   fromHash,
-		ToHash:     toHash,
-	}
-	ci.Changes = append(ci.Changes, change)
-}
-
-// Синхронизация локального и удаленного репозитория
-func (gitRepo *GitRepository) SyncRepository() error {
+// Sync выполняет синхронизацию локального и удаленного репозитория
+func (gitRepo *GitRepository) Sync() error {
 
 	var err error
 
@@ -162,11 +154,45 @@ func (gitRepo *GitRepository) SyncRepository() error {
 	return nil
 }
 
-// cloneRepo клонирует репозиторий
+// Options получает параметры подключения к репозиторию
+func (gitRepo *GitRepository) Options() *GitRepositoryOptions {
+	return gitRepo.options
+}
+
+// HasChanges получает текущее значение флага "найдены изменения"
+func (gitRepo *GitRepository) HasChanges() bool {
+	gitRepo.mutex.Lock()
+	defer gitRepo.mutex.Unlock()
+	return gitRepo.hasChanges
+}
+
+// Commit получает текущий коммит
+func (gitRepo *GitRepository) Commit() (*CommitInfo, error) {
+
+	gitRepo.mutex.Lock()
+	defer gitRepo.mutex.Unlock()
+
+	if gitRepo.currentCommit == nil {
+		return nil, fmt.Errorf("отсутствуют текущиий коммит")
+	}
+
+	return gitRepo.currentCommit, nil
+}
+
+// CommitHash получает текущий хеш коммита
+func (gitRepo *GitRepository) CommitHash() string {
+	return gitRepo.currentCommit.Hash
+}
+
+// cloneRepo выполняет клонирование репозиторий
 func (gitRepo *GitRepository) cloneRepo() error {
 
-	repoDir := gitRepo.Options.path
-	gitDir := filepath.Join(gitRepo.Options.path, ".git")
+	repoDir := gitRepo.options.path
+	if gitRepo.options == nil {
+		return fmt.Errorf("ошибка получения пути локального репозитория")
+	}
+
+	gitDir := filepath.Join(gitRepo.options.path, ".git")
 
 	needToClone := false
 
@@ -184,10 +210,10 @@ func (gitRepo *GitRepository) cloneRepo() error {
 		return nil
 	}
 
-	repository, err := git.PlainClone(gitRepo.Options.path, false, &git.CloneOptions{
-		URL: gitRepo.Options.url, // URL удаленного репозитория
+	repository, err := git.PlainClone(gitRepo.options.path, false, &git.CloneOptions{
+		URL: gitRepo.options.url, // URL удаленного репозитория
 		Auth: &http.TokenAuth{
-			Token: gitRepo.Options.token, // Токен для аутентификации
+			Token: gitRepo.options.token, // Токен для аутентификации
 		},
 	})
 	if err != nil {
@@ -209,7 +235,7 @@ func (gitRepo *GitRepository) cloneRepo() error {
 // openRepo открывает репозиторий
 func (gitRepo *GitRepository) openRepo() error {
 	// Открываем репозиторий
-	repository, err := git.PlainOpen(gitRepo.Options.path)
+	repository, err := git.PlainOpen(gitRepo.options.path)
 	if err != nil {
 		return fmt.Errorf("failed to open repository: %v", err)
 	}
@@ -229,7 +255,6 @@ func (gitRepo *GitRepository) cloneOpenRepo() error {
 	}
 
 	return nil
-
 }
 
 // fetchRepo обновляет локальный репозиторий данными из удаленного,
@@ -238,7 +263,7 @@ func (gitRepo *GitRepository) cloneOpenRepo() error {
 // уже актуален и не требует обновления, возвращает nil без ошибки.
 func (gitRepo *GitRepository) fetchRepo() error {
 
-	remote, err := gitRepo.repository.Remote(gitRepo.Options.originName)
+	remote, err := gitRepo.repository.Remote(gitRepo.options.originName)
 	if err != nil {
 		return fmt.Errorf("failed to get remote: %v", err)
 	}
@@ -246,7 +271,7 @@ func (gitRepo *GitRepository) fetchRepo() error {
 	// Выполняем fetch для получения обновлений из удаленного репозитория
 	err = remote.Fetch(&git.FetchOptions{
 		Auth: &http.TokenAuth{
-			Token: gitRepo.Options.token,
+			Token: gitRepo.options.token,
 		},
 		Force: true,
 	})
@@ -275,8 +300,8 @@ func (gitRepo *GitRepository) pullRepo(force bool) error {
 
 	// Выполняем операцию Pull с указанными параметрами
 	err = wt.Pull(&git.PullOptions{
-		RemoteURL:  gitRepo.Options.url,
-		RemoteName: gitRepo.Options.originName,
+		RemoteURL:  gitRepo.options.url,
+		RemoteName: gitRepo.options.originName,
 		Force:      force,
 	})
 
@@ -355,13 +380,13 @@ func (gitRepo *GitRepository) getCommit(isRemote bool) (*object.Commit, error) {
 
 	// Если требуется получить удаленный коммит
 	if isRemote {
-		remote, err := gitRepo.repository.Remote(gitRepo.Options.originName)
+		remote, err := gitRepo.repository.Remote(gitRepo.options.originName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get remote: %v", err)
 		}
 
 		// Формируем путь к удаленной ветке на основе указанного имени
-		ref = plumbing.ReferenceName(fmt.Sprintf("refs/remotes/%s/%s", remote.Config().Name, gitRepo.Options.branch))
+		ref = plumbing.ReferenceName(fmt.Sprintf("refs/remotes/%s/%s", remote.Config().Name, gitRepo.options.branch))
 	} else {
 		// Получаем последний коммит на локальной ветке
 		localRef, err := gitRepo.repository.Head()
@@ -384,7 +409,7 @@ func (gitRepo *GitRepository) getCommit(isRemote bool) (*object.Commit, error) {
 	return commit, nil
 }
 
-// Проверяем наличие изменений между локальным и удаленным коммитами
+// compareCommitTrees Проверяем наличие изменений между локальным и удаленным коммитами
 func (gitRepo *GitRepository) compareCommitTrees() error {
 
 	// Получаем последний коммит локального репозитория
@@ -437,7 +462,7 @@ func (gitRepo *GitRepository) compareCommitTrees() error {
 	return nil
 }
 
-// Проверяем наличие изменений в файлах лольного репозитория
+// compareFiles Проверяем наличие изменений в файлах лольного репозитория
 func (gitRepo *GitRepository) compareFiles() error {
 
 	wt, err := gitRepo.getRepoWorktree()
@@ -475,41 +500,20 @@ func (gitRepo *GitRepository) compareFiles() error {
 	return nil
 }
 
+// resetChangesFlag сбрасывает текущее значение флага "найдены изменения" в значение false
 func (gitRepo *GitRepository) resetChangesFlag() {
 	gitRepo.mutex.Lock()
 	defer gitRepo.mutex.Unlock()
 	gitRepo.hasChanges = false
 }
 
+// setChangesFlag устанавливает текущее значение флага "найдены изменения"
 func (gitRepo *GitRepository) setChangesFlag(hasChanges bool) {
 	if hasChanges {
 		gitRepo.mutex.Lock()
 		defer gitRepo.mutex.Unlock()
 		gitRepo.hasChanges = hasChanges
 	}
-}
-
-func (gitRepo *GitRepository) GetChangesFlag() bool {
-	gitRepo.mutex.Lock()
-	defer gitRepo.mutex.Unlock()
-	return gitRepo.hasChanges
-}
-
-// Получение текущего коммита
-func (gr *GitRepository) GetCurrentCommit() (*CommitInfo, error) {
-
-	gr.mutex.Lock()
-	defer gr.mutex.Unlock()
-
-	if gr.currentCommit == nil {
-		return nil, fmt.Errorf("отсутствуют текущиий коммит")
-	}
-
-	return gr.currentCommit, nil
-}
-
-func (gitRepo *GitRepository) GetCurrentCommitHash() string {
-	return gitRepo.currentCommit.Hash
 }
 
 // showCommitMessage выводит информацию о последнем сохраненном коммите.
@@ -537,13 +541,4 @@ func (gitRepo *GitRepository) showCommitMessage() error {
 	logger.GetLogger().Info("%s %s %s (%s) %s %s\n", reason, commitHash, authorName, authorEmail, commitDate, commitMessage)
 
 	return nil
-
-}
-
-func (gitRepoOptions *GitRepositoryOptions) Url() string {
-	return gitRepoOptions.url
-}
-
-func (gitRepoOptions *GitRepositoryOptions) Branch() string {
-	return gitRepoOptions.branch
 }

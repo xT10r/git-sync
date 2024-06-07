@@ -17,41 +17,31 @@ package gitsync
 import (
 	"context"
 	"flag"
-	"git-sync/git"
 	"git-sync/internal/constants"
 	"git-sync/internal/handlers"
+	"git-sync/internal/interfaces"
 	"git-sync/internal/metrics"
 	"git-sync/logger"
-	"sync"
 	"time"
 )
 
 type GitSync struct {
-	mutex    sync.Mutex
 	ctx      context.Context
-	interval time.Duration      // Интервал обновления репозитория
-	git      *git.GitRepository // Данные синхронизируемого репозитория
+	interval time.Duration // Интервал обновления репозитория
 }
 
 // NewGitSync создает экземпляр SyncOptions с значениями по умолчанию.
 func NewGitSync(f *flag.FlagSet, ctx context.Context) (*GitSync, error) {
 
-	gitRepo, err := git.NewGitRepository(f)
-	if err != nil {
-		return nil, err
-	}
-
 	gitSync := &GitSync{
-		mutex:    sync.Mutex{},
 		ctx:      ctx,
 		interval: f.Lookup(constants.FlagSyncInterval).Value.(flag.Getter).Get().(time.Duration),
-		git:      gitRepo,
 	}
 
 	return gitSync, nil
 }
 
-func (gitsync *GitSync) Start() {
+func (gitsync *GitSync) Start(gitRepo interfaces.Gitter) {
 
 	logger.GetLogger().Info("Начало синхронизации\n")
 
@@ -69,26 +59,27 @@ func (gitsync *GitSync) Start() {
 
 		case ip := <-handlers.WebhookCh:
 			// Синхронизация по вебхуку
-			_ = gitsync.sync()
+			_ = gitsync.Sync(gitRepo)
 			logger.GetLogger().Info("Синхронизации по вебхуку (client ip: %s)\n", ip)
 
 		case <-ticker.C:
 			// Синхронизация
-			_ = gitsync.sync()
+			_ = gitsync.Sync(gitRepo)
 		}
 	}
 }
 
-func (gitsync *GitSync) sync() error {
+func (gitsync *GitSync) Sync(gitRepo interfaces.Gitter) error {
+
 	// Синхронизация локального репозитория
-	err := gitsync.git.SyncRepository()
+	err := gitRepo.Sync()
 	if err != nil {
 		logger.GetLogger().Error("Ошибка синхронизации: %v", err)
 		metrics.SyncTotalErrorCount.Inc()
 	}
 
 	// Получаем текущий коммит
-	commit, err := gitsync.git.GetCurrentCommit()
+	commit, err := gitRepo.Commit()
 	if err != nil {
 		logger.GetLogger().Error("%v\n", err)
 	} else {
@@ -99,9 +90,9 @@ func (gitsync *GitSync) sync() error {
 	metrics.SyncTotalCount.Inc()
 
 	// Обновляем метрику с информацией о синхронизируемом репозитории
-	metrics.UpdateSyncRepoInfo(gitsync.git.Options)
+	metrics.UpdateSyncRepoInfo(gitRepo.Options())
 
-	if gitsync.git.GetChangesFlag() {
+	if gitRepo.HasChanges() {
 		// Увеличиваем счетчик синхронизаций с изменениями
 		metrics.SyncCount.Inc()
 	}
@@ -111,4 +102,8 @@ func (gitsync *GitSync) sync() error {
 
 func (gitsync *GitSync) Stop() error {
 	return nil
+}
+
+func (gitsync *GitSync) GetCtx() context.Context {
+	return gitsync.ctx
 }

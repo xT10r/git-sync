@@ -21,7 +21,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"git-sync/git"
 	"git-sync/internal/flags"
 	"git-sync/internal/gitsync"
 	"git-sync/internal/http"
@@ -40,9 +40,14 @@ func main() {
 
 	flagSet := flags.NewConsoleFlags()
 	gitSync, err := gitsync.NewGitSync(flagSet.Gitsync, ctx)
-
 	if err != nil {
-		fmt.Println("Ошибка при создании объекта SyncOptions:", err)
+		logger.GetLogger().Error("Ошибка при создании объекта GitSync: %v\n", err)
+		return
+	}
+
+	gitRepo, err := git.NewGitRepository(flagSet.Gitsync)
+	if err != nil {
+		logger.GetLogger().Error("Ошибка при создании объекта GitRepository: %v\n", err)
 		return
 	}
 
@@ -50,7 +55,7 @@ func main() {
 	http.StartServer(flagSet.Gitsync, ctx)
 
 	// Запускаем периодическую синхронизацию в отдельной горутине
-	go gitSync.Start()
+	go gitSync.Start(gitRepo)
 
 	// Ждем сигналов SIGINT или SIGTERM для завершения программы
 	waitForSignals(cancel)
