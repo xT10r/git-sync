@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -40,6 +41,77 @@ type GitRepository struct {
 	repository    *git.Repository
 	currentCommit *CommitInfo
 	hasChanges    bool
+}
+
+type ChangeInfo struct {
+	ChangeType string
+	FileName   string
+	FromHash   string
+	ToHash     string
+}
+
+type CommitInfo struct {
+	Hash    string
+	Date    time.Time
+	Message string
+	Author  string
+	Email   string
+	Reason  string
+	commit  *object.Commit
+	Changes []ChangeInfo
+}
+
+type GitRepositoryOptions struct {
+	url        string // URL удаленного репозитория
+	branch     string // Ветка репозитория
+	path       string // Путь до локального репозитория
+	user       string // Имя пользователя (для аутентификации)
+	token      string // Токен (для аутентификации)
+	originName string // имя удаленного репозитория
+}
+
+// NewCommitInfo создает новый объект CommitInfo на основе git.Commit.
+func NewCommitInfo(commit *object.Commit) *CommitInfo {
+
+	return &CommitInfo{
+		Hash:    commit.Hash.String(),
+		Date:    commit.Committer.When,
+		Message: strings.TrimSpace(commit.Message),
+		Author:  commit.Author.Name,
+		Email:   commit.Author.Email,
+		commit:  commit,
+		Changes: []ChangeInfo{},
+	}
+}
+
+func NewGitRepositoryOptions(url, branch, path, user, token, originName string) *GitRepositoryOptions {
+	return &GitRepositoryOptions{
+		url:        url,
+		branch:     branch,
+		path:       path,
+		user:       user,
+		token:      token,
+		originName: originName,
+	}
+}
+
+func (gitRepoOptions *GitRepositoryOptions) Url() string {
+	return gitRepoOptions.url
+}
+
+func (gitRepoOptions *GitRepositoryOptions) Branch() string {
+	return gitRepoOptions.branch
+}
+
+// AddChange добавляет информацию об изменении файла в CommitInfo.
+func (ci *CommitInfo) AddChange(changeType, fileName, fromHash, toHash string) {
+	change := ChangeInfo{
+		ChangeType: changeType,
+		FileName:   fileName,
+		FromHash:   fromHash,
+		ToHash:     toHash,
+	}
+	ci.Changes = append(ci.Changes, change)
 }
 
 // NewSyncOptions создает экземпляр SyncOptions с значениями по умолчанию.

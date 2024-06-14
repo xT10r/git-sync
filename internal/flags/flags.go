@@ -74,74 +74,32 @@ func ParseFlags() *flag.FlagSet {
 func validateFlags(fs *flag.FlagSet) error {
 
 	// Repo URL
-	if repoUrl, isExists := getFlagValue(fs, constants.FlagRepoUrl); !isExists {
-		return fmt.Errorf("repository Url is not set")
-	} else {
-		if err := validateRemoteURL(repoUrl); err != nil {
-			return err
-		}
-	}
-
-	// Repo Branch
-	if repoBranch, isExists := getFlagValue(fs, constants.FlagRepoBranch); !isExists || repoBranch == "" {
-		logger.GetLogger().Warning("Repository branch is not set\n")
-	}
-
-	// Repo user
-	if repoUser, isExists := getFlagValue(fs, constants.FlagRepoAuthUser); !isExists || repoUser == "" {
-		logger.GetLogger().Warning("Repository user is not set\n")
-	}
-
-	// Repo token
-	if repoToken, isExists := getFlagValue(fs, constants.FlagRepoAuthToken); !isExists || repoToken == "" {
-		logger.GetLogger().Warning("Repository user token is not set\n")
+	if err := validateFlagURL(fs, constants.FlagRepoUrl, "Repository URL"); err != nil {
+		return err
 	}
 
 	// Local path
-	if localPath, isExists := getFlagValue(fs, constants.FlagLocalPath); !isExists {
-		return fmt.Errorf("local path is not set")
-	} else {
-		if err := validateLocalPath(localPath); err != nil {
-			return err
-		}
+	if err := validateFlagLocalPath(fs, constants.FlagLocalPath, "Local Path"); err != nil {
+		return err
 	}
 
+	// Repo Branch
+	validateFlagOptional(fs, constants.FlagRepoBranch, "Repository Branch")
+
+	// Repo user
+	validateFlagOptional(fs, constants.FlagRepoAuthUser, "Repository User")
+
+	// Repo token
+	validateFlagOptional(fs, constants.FlagRepoAuthToken, "Repository Token")
+
 	// Sync interval
-	if syncInterval, isExists := getFlagValue(fs, constants.FlagSyncInterval); !isExists {
-		return fmt.Errorf("local path is not set")
-	} else {
-		if err := validateSyncInterval(syncInterval); err != nil {
-			return err
-		}
+	if err := validateFlagSyncInterval(fs, constants.FlagSyncInterval, "Sync Interval"); err != nil {
+		return err
 	}
 
 	// HTTP Server Addr
-	if httpServerAddr, _ := getFlagValue(fs, constants.FlagHttpServerAddr); len(httpServerAddr) > 0 {
-		if err := validateServerAddress(httpServerAddr); err != nil {
-			return err
-		}
-
-		// HTTP Server Auth username
-		username, userIsExists := getFlagValue(fs, constants.FlagHttpServerAuthUsername)
-
-		if userIsExists && len(username) > 0 {
-
-			// HTTP Server Auth password
-			password, passwordisExists := getFlagValue(fs, constants.FlagHttpServerAuthPassword)
-			if username == password && passwordisExists {
-				logger.GetLogger().Warning("HTTP-сервер: имя пользователя и пароль совпадают\n")
-			} else if len(password) == 0 {
-				logger.GetLogger().Warning("HTTP-сервер: аутентификация не активна (отсутствует пароль пользователя)\n")
-			}
-		}
-
-		// HTTP Server Auth Baerer Token
-		token, tokenisExists := getFlagValue(fs, constants.FlagHttpServerAuthToken)
-
-		if tokenisExists && !userIsExists && len(token) == 0 {
-			logger.GetLogger().Warning("HTTP-сервер: не указан токен\n")
-		}
-
+	if err := validateFlagsHttpServer(fs); err != nil {
+		return err
 	}
 
 	return nil
@@ -178,36 +136,69 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	return duration
 }
 
-func validateRemoteURL(remoteURL string) error {
-	_, err := url.Parse(remoteURL)
+func validateFlagURL(fs *flag.FlagSet, fn string, desc string) error {
+
+	repoUrl, isExists := getFlagValue(fs, fn)
+
+	if !isExists {
+		return fmt.Errorf("%s is not set", desc)
+	}
+
+	_, err := url.Parse(repoUrl)
 	if err != nil {
 		return fmt.Errorf("неверный формат URL-ссылки: %s", err)
 	}
 	return nil
 }
 
-func validateLocalPath(localPath string) error {
+func validateFlagLocalPath(fs *flag.FlagSet, fn string, desc string) error {
+
+	localPath, isExists := getFlagValue(fs, fn)
+
+	if !isExists {
+		return fmt.Errorf("%s is not set", desc)
+	}
+
 	if _, err := os.Stat(localPath); os.IsNotExist(err) {
 		return fmt.Errorf("указанный путь не существует: %s", localPath)
 	}
 	return nil
 }
 
-func validateSyncInterval(syncIntervalStr string) error {
+func validateFlagOptional(fs *flag.FlagSet, fn string, desc string) {
+	if fv, isExists := getFlagValue(fs, fn); !isExists || fv == "" {
+		logger.GetLogger().Warning("%s is not set\n", desc)
+	}
+}
 
-	if syncInterval, err := time.ParseDuration(syncIntervalStr); err != nil {
+func validateFlagSyncInterval(fs *flag.FlagSet, fn string, desc string) error {
+
+	fv, isExists := getFlagValue(fs, fn)
+	if !isExists {
+		return fmt.Errorf("%s is not set", desc)
+	}
+
+	if duration, err := time.ParseDuration(fv); err != nil {
 		return fmt.Errorf("не удалось привести строковое значение интервала синхронизации к длительности")
 	} else {
-		if syncInterval <= 0 {
+		if duration <= 0 {
 			return fmt.Errorf("интервал синхронизации должен быть положительным")
 		}
 	}
 	return nil
 }
 
-func validateServerAddress(addr string) error {
+func validateFlagsHttpServer(fs *flag.FlagSet) error {
+
+	// HTTP Server Addr
+	httpServerAddr, _ := getFlagValue(fs, constants.FlagHttpServerAddr)
+
+	if len(httpServerAddr) == 0 {
+		return nil
+	}
+
 	// Разделение адреса на IP и порт
-	parts := strings.Split(addr, ":")
+	parts := strings.Split(httpServerAddr, ":")
 	if len(parts) != 2 {
 		return fmt.Errorf("адрес должен быть в формате IP:PORT")
 	}
@@ -224,5 +215,17 @@ func validateServerAddress(addr string) error {
 		return fmt.Errorf("некорректный порт. Допустимый диапазон портов [1-65535]")
 	}
 
+	// HTTP Server Auth username
+	username, _ := getFlagValue(fs, constants.FlagHttpServerAuthUsername)
+	password, _ := getFlagValue(fs, constants.FlagHttpServerAuthPassword)
+
+	// HTTP Server Auth Baerer Token
+	token, _ := getFlagValue(fs, constants.FlagHttpServerAuthToken)
+
+	if len(username) == 0 && len(password) == 0 && len(token) == 0 {
+		logger.GetLogger().Warning("HTTP-сервер: аутентификация не активна")
+	}
+
 	return nil
 }
+

@@ -15,6 +15,7 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -36,7 +37,7 @@ var (
 )
 
 var (
-	defaultFlags = log.LstdFlags | log.Lshortfile | log.Ltime
+	defaultFlags = log.LstdFlags | log.Ltime
 )
 
 func NewLogger() *Logger {
@@ -98,9 +99,10 @@ func (l *Logger) Warning(format string, v ...interface{}) {
 }
 
 // Error записывает сообщение с префиксом ERROR в лог.
-func (l *Logger) Error(format string, v ...interface{}) {
+func (l *Logger) Error(format string, v ...interface{}) error {
 	curPrefix := l.logger.Prefix()
 	l.logger.SetPrefix(errorPrefix)
 	defer l.logger.SetPrefix(curPrefix)
 	l.logger.Printf(format, v...)
+	return fmt.Errorf(format, v...)
 }

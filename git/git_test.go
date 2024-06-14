@@ -17,7 +17,7 @@ package git_test
 import (
 	"git-sync/git"
 	"git-sync/internal/constants"
-	"git-sync/tests/mock"
+	"git-sync/mock"
 	"os"
 	"path"
 	"strings"

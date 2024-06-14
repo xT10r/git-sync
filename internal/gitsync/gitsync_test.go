@@ -18,7 +18,7 @@ import (
 	"context"
 	"git-sync/internal/gitsync"
 	"git-sync/internal/handlers"
-	"git-sync/tests/mock"
+	"git-sync/mock"
 	"testing"
 	"time"
 )

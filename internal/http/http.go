@@ -119,16 +119,21 @@ func StartServer(f *flag.FlagSet, ctx context.Context) {
 
 	if useBasicAuth {
 		chain = chain.Append(basicAuthMiddleware(basicUsername, basicPassword))
-		logger.GetLogger().Info("HTTP-сервер: используется базовая аутентификация\n")
-	}
+		if basicUsername == basicPassword && len(basicUsername) > 0 {
+			logger.GetLogger().Warning("HTTP-сервер: базовая аутентификация (небезопасный пароль)\n")
+		} else {
+			logger.GetLogger().Info("HTTP-сервер: базовая аутентификация\n")
+		}
 
-	if useBaererToken {
+	} else if !useBasicAuth && useBaererToken {
 		chain = chain.Append(bearerAuthMiddleware(bearerToken))
-		logger.GetLogger().Info("HTTP-сервер: используется аутентификация по токену\n")
+		logger.GetLogger().Info("HTTP-сервер: аутентификация по токену\n")
+	} else {
+		logger.GetLogger().Info("HTTP-сервер: без аутентификации\n")
 	}
 
 	registerHandler("/metrics", chain.Then(handlers.MetricsHandler()), nil)
-	registerHandler("/webhook", http.HandlerFunc(handlers.WebhookHandlerFunc), nil)
+	registerHandler("/webhook", chain.Then(http.HandlerFunc(handlers.WebhookHandlerFunc)), nil)
 	registerHandler("/", nil, rootHandlerFunc)
 
 	go func() {

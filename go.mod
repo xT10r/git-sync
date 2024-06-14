@@ -8,6 +8,12 @@ require (
 )
 
 require (
+	github.com/arekkas/accurate-test-coverage v0.0.0-20170711090600-2fcab3a8a34f // indirect
+	golang.org/x/tools v0.20.0 // indirect
+	golang.org/x/tools/cmd/cover v0.1.0-deprecated // indirect
+)
+
+require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect

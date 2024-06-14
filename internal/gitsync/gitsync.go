@@ -43,7 +43,7 @@ func NewGitSync(f *flag.FlagSet, ctx context.Context) (*GitSync, error) {
 
 func (gitsync *GitSync) Start(gitRepo interfaces.Gitter) {
 
-	logger.GetLogger().Info("Начало синхронизации\n")
+	logger.GetLogger().Info("Синхронизатор: начало синхронизации\n")
 
 	// Создаем тикер для периодической синхронизации
 	ticker := time.NewTicker(gitsync.interval)
@@ -54,13 +54,13 @@ func (gitsync *GitSync) Start(gitRepo interfaces.Gitter) {
 
 		case <-gitsync.ctx.Done():
 			// Контекст отменен, выходим
-			logger.GetLogger().Info("Завершение синхронизации\n")
+			logger.GetLogger().Info("Синхронизатор: завершение синхронизации\n")
 			return
 
 		case ip := <-handlers.WebhookCh:
 			// Синхронизация по вебхуку
 			_ = gitsync.Sync(gitRepo)
-			logger.GetLogger().Info("Синхронизации по вебхуку (client ip: %s)\n", ip)
+			logger.GetLogger().Info("Синхронизатор: синхронизация по вебхуку (client ip: %s)\n", ip)
 
 		case <-ticker.C:
 			// Синхронизация
