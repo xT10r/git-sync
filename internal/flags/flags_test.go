@@ -15,11 +15,18 @@
 package flags
 
 import (
+	"bytes"
 	"flag"
+	"fmt"
+	"git-sync/logger"
+	"log"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 )
+
+// Структура для тест-кейсов строковых переменных окружения
 
 func TestGetFlagValue(t *testing.T) {
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -33,7 +40,7 @@ func TestGetFlagValue(t *testing.T) {
 
 func TestGetEnv(t *testing.T) {
 
-	// Определяем структуру для тест-кейсов
+	// Подготовим структуру для строковых переменных окружения
 	type getEnvTestCase struct {
 		envKey   string
 		envValue string
@@ -60,23 +67,82 @@ func TestGetEnv(t *testing.T) {
 }
 
 func TestGetEnvDuration(t *testing.T) {
-	os.Setenv("TEST_ENV_DURATION", "1m")
-	defer os.Unsetenv("TEST_ENV_DURATION")
 
-	duration := getEnvDuration("TEST_ENV_DURATION", 30*time.Second)
-	expected := 1 * time.Minute
-	if duration != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, duration)
+	// Подготовим структуру для переменных окружения длительности
+	type getEnvTestCase struct {
+		envKey   string
+		envValue string
+		expected time.Duration
+	}
+
+	testCases := []getEnvTestCase{
+		{"TEST_ENV_DURATION_VALUE", "30s", 30 * time.Second},
+		{"TEST_ENV_DURATION__EMPTY_VALUE", "", 0},
+		{"TEST_ENV_DURATION_DEFAULT_VALUE", "invalid", 5 * time.Second},
+	}
+
+	// Выполнение тестов
+	for _, tc := range testCases {
+		t.Run(tc.envKey, func(t *testing.T) {
+			os.Setenv(tc.envKey, tc.envValue)
+			defer os.Unsetenv(tc.envKey)
+			value := getEnvDuration(tc.envKey, tc.expected)
+			if value != tc.expected {
+				t.Errorf("Expected '%s', got '%s'", tc.expected, value)
+			}
+		})
 	}
 }
 
 func TestValidateFlagURL(t *testing.T) {
-	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-	fs.String("urlFlag", "http://example.com", "")
 
-	err := validateFlagURL(fs, "urlFlag", "URL Flag")
-	if err != nil {
-		t.Errorf("Expected no error, got '%v'", err)
+	tests := []struct {
+		name      string
+		flagName  string
+		flagValue string
+		desc      string
+		expected  error
+	}{
+		{
+			name:      "Flag exists and is set with valid URL",
+			flagName:  "urlFlag",
+			flagValue: "http://www.example.com",
+			desc:      "URL Flag",
+			expected:  nil,
+		},
+		{
+			name:      "Flag does not exist",
+			flagName:  "nonExistentFlag",
+			flagValue: "",
+			desc:      "Non-existent flag",
+			expected:  fmt.Errorf("Non-existent flag is not set"),
+		},
+		{
+			name:      "Flag exists but has invalid URL",
+			flagName:  "invalidURLFlag",
+			flagValue: "invalid-url",
+			desc:      "Invalid URL Flag",
+			expected:  fmt.Errorf("неверный формат URL-ссылки: parse \"invalid-url\": invalid URI for request"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := flag.NewFlagSet("test", flag.ContinueOnError)
+			if tt.flagValue != "" {
+				fs.String(tt.flagName, tt.flagValue, tt.desc)
+			}
+
+			err := validateFlagURL(fs, tt.flagName, tt.desc)
+
+			if tt.expected != nil && err != nil && err.Error() != tt.expected.Error() {
+				t.Errorf("Expected error '%v', but got '%v'", tt.expected, err)
+			} else if tt.expected == nil && err != nil {
+				t.Errorf("Expected no error, but got '%v'", err)
+			} else if tt.expected != nil && err == nil {
+				t.Errorf("Expected error '%v', but got no error", tt.expected)
+			}
+		})
 	}
 }
 
@@ -90,12 +156,70 @@ func TestValidateFlagLocalPath(t *testing.T) {
 	}
 }
 
+// Тестовая функция validateFlagOptional проверяет, что при отсутствии флага или его пустом значении выводится предупреждающее сообщение
 func TestValidateFlagOptional(t *testing.T) {
-	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-	fs.String("optionalFlag", "optionalValue", "")
+	tests := []struct {
+		name       string
+		flagName   string
+		flagValue  string
+		flagExists bool
+		desc       string
+		expected   string
+	}{
+		{
+			name:       "Flag exists and is set",
+			flagName:   "testFlag",
+			flagValue:  "someValue",
+			flagExists: true,
+			desc:       "Test flag",
+			expected:   "",
+		},
+		{
+			name:       "Flag does not exist",
+			flagName:   "nonExistentFlag",
+			flagValue:  "",
+			flagExists: false,
+			desc:       "Non-existent flag",
+			expected:   "Non-existent flag is not set",
+		},
+		{
+			name:       "Flag exists but is empty",
+			flagName:   "emptyFlag",
+			flagValue:  "",
+			flagExists: true,
+			desc:       "Empty flag",
+			expected:   "Empty flag is empty",
+		},
+	}
 
-	validateFlagOptional(fs, "optionalFlag", "Optional Flag")
-	// Ensure no panic
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := flag.NewFlagSet("test", flag.ContinueOnError)
+			if tt.flagExists {
+				fs.String(tt.flagName, tt.flagValue, tt.desc)
+			}
+
+			expectedPrefix := logger.GetLogger().GetWarnPrefix()
+
+			// Перехватываем вывод логгера
+			var buf bytes.Buffer
+			logger.GetLogger().SetOutput(&buf)
+			defer log.SetOutput(nil) // Восстанавливаем вывод логгера
+
+			validateFlagOptional(fs, tt.flagName, tt.desc)
+
+			logOutput := buf.String()
+
+			// Создаем регулярное выражение для проверки префикса и ожидаемого сообщения без даты
+			re := regexp.MustCompile(fmt.Sprintf(`\[WARN\] \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} %s`, tt.expected))
+
+			if tt.expected != "" && !re.MatchString(logOutput) {
+				t.Errorf("Expected log message to contain '%s', but got '%s'", expectedPrefix+tt.expected, logOutput)
+			} else if tt.expected == "" && logOutput != "" {
+				t.Errorf("Expected no log message, but got '%s'", logOutput)
+			}
+		})
+	}
 }
 
 func TestValidateFlagSyncInterval(t *testing.T) {

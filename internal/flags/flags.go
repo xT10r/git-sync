@@ -140,11 +140,13 @@ func validateFlagURL(fs *flag.FlagSet, fn string, desc string) error {
 
 	repoUrl, isExists := getFlagValue(fs, fn)
 
+	// Проверка наличия флага
 	if !isExists {
 		return fmt.Errorf("%s is not set", desc)
 	}
 
-	_, err := url.Parse(repoUrl)
+	// Проверка корректности указанного URL
+	_, err := url.ParseRequestURI(repoUrl)
 	if err != nil {
 		return fmt.Errorf("неверный формат URL-ссылки: %s", err)
 	}
@@ -166,8 +168,10 @@ func validateFlagLocalPath(fs *flag.FlagSet, fn string, desc string) error {
 }
 
 func validateFlagOptional(fs *flag.FlagSet, fn string, desc string) {
-	if fv, isExists := getFlagValue(fs, fn); !isExists || fv == "" {
+	if fv, isExists := getFlagValue(fs, fn); !isExists {
 		logger.GetLogger().Warning("%s is not set\n", desc)
+	} else if fv == "" {
+		logger.GetLogger().Warning("%s is empty\n", desc)
 	}
 }
 
@@ -228,4 +232,3 @@ func validateFlagsHttpServer(fs *flag.FlagSet) error {
 
 	return nil
 }
-
