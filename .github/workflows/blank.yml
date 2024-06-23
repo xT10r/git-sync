@@ -1,0 +1,47 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI-demo
+
+on:
+  push:
+    branches: [ "develop-action" ]
+  pull_request:
+    branches: [ "develop-action" ]
+
+jobs:
+  build:
+    name: Build, Test and Deploy
+    runs-on: ubuntu-latest
+
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+      REPO_NAME: your-docker-repo-name
+
+    steps:
+    # Checkout the repository
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    # Set up Go environment
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.21'
+
+    # Cache Go modules
+    - name: Cache Go modules
+      uses: actions/cache@v2
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    # Install dependencies
+    - name: Install dependencies
+      run: go mod download
+
+    # Run tests
+    - name: Run tests
+      run: go test ./...
