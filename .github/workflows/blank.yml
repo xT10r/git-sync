@@ -46,6 +46,12 @@ jobs:
     - name: Run tests
       run: go test -cover ./...
 
+    # Create build directories
+    - name: Create build directories
+      run: |
+        mkdir -p build/linux
+        mkdir -p build/windows
+
     # Build for Linux
     - name: Build for Linux
       run: |
