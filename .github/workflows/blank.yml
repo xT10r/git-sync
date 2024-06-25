@@ -44,4 +44,38 @@ jobs:
 
     # Run tests
     - name: Run tests
-      run: go test ./...
+      run: go test -covert ./...
+
+    # Build for Linux
+    - name: Build for Linux
+      run: |
+        GOOS=linux GOARCH=amd64 go build -o build/linux/gitsync ./...
+
+    # Build for Windows
+    - name: Build for Windows
+      run: |
+        GOOS=windows GOARCH=amd64 go build -o build/windows/gitsync.exe ./...
+
+    # Package application for Linux
+    - name: Package for Linux
+      run: |
+        tar -czvf build/linux/gitsync-linux.tar.gz -C build/linux gitsync
+
+    # Package application for Windows
+    - name: Package for Windows
+      run: |
+        zip -j build/windows/gitsync-win64.zip build/windows/gitsync.exe
+
+    # Upload Linux artifact
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: gitsync-linux
+        path: build/linux/gitsync-linux.tar.gz
+
+    # Upload Windows artifact
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: gitsync-win64
+        path: build/windows/gitsync-win64.zip
