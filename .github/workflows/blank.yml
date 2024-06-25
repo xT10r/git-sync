@@ -46,21 +46,17 @@ jobs:
     - name: Run tests
       run: go test -cover ./...
 
-    # Create build directories
-    - name: Create build directories
-      run: |
-        mkdir -p build/linux
-        mkdir -p build/windows
-
     # Build for Linux
     - name: Build for Linux
       run: |
-        GOOS=linux GOARCH=amd64 go build -o build/linux/gitsync ./...
+        mkdir -p build/linux
+        GOOS=linux GOARCH=amd64 go build -o build/linux/gitsync ./cmd/
 
     # Build for Windows
     - name: Build for Windows
       run: |
-        GOOS=windows GOARCH=amd64 go build -o build/windows/gitsync.exe ./...
+        mkdir -p build/windows
+        GOOS=windows GOARCH=amd64 go build -o build/windows/gitsync.exe ./cmd/
 
     # Package application for Linux
     - name: Package for Linux
