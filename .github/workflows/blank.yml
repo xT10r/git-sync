@@ -44,7 +44,7 @@ jobs:
 
     # Run tests
     - name: Run tests
-      run: go test -covert ./...
+      run: go test -cover ./...
 
     # Build for Linux
     - name: Build for Linux
