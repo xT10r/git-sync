@@ -37,11 +37,6 @@ func NewConsoleFlags() *ConsoleFlags {
 
 	fs := ParseFlags()
 
-	if err := validateFlags(fs); err != nil {
-		logger.GetLogger().Error("%v", err)
-		return nil
-	}
-
 	return &ConsoleFlags{
 		Gitsync: fs,
 	}
@@ -69,6 +64,39 @@ func ParseFlags() *flag.FlagSet {
 	fs.Parse(os.Args[1:])
 
 	return fs
+}
+
+// CheckRequiredFlags проверяет, заданы ли все обязательные флаги
+func (cf *ConsoleFlags) CheckRequiredFlags() error {
+
+	requiredFlags := []string{
+		constants.FlagRepoUrl,
+		constants.FlagRepoBranch,
+		constants.FlagLocalPath,
+	}
+
+	var missingFlags []string
+	for _, flagName := range requiredFlags {
+		flag := cf.Gitsync.Lookup(flagName)
+		if flag == nil || flag.Value.String() == "" {
+			missingFlags = append(missingFlags, flagName)
+		}
+	}
+
+	if len(missingFlags) > 0 {
+		return fmt.Errorf("не заданы обязательные параметры запуска: %v", strings.Join(missingFlags, ", "))
+	}
+	return nil
+
+}
+
+func (consoleFlags *ConsoleFlags) ValidateFlags() error {
+
+	if err := validateFlags(consoleFlags.Gitsync); err != nil {
+		logger.GetLogger().Error("%v", err)
+		return err
+	}
+	return nil
 }
 
 func validateFlags(fs *flag.FlagSet) error {
