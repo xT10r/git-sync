@@ -13,11 +13,6 @@ jobs:
     name: Build, Test and Deploy
     runs-on: ubuntu-latest
 
-    env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-      REPO_NAME: your-docker-repo-name
-
     steps:
     # Checkout the repository
     - name: Checkout code
@@ -33,10 +28,12 @@ jobs:
     - name: Cache Go modules
       uses: actions/cache@v4
       with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ github.run_id }}
         restore-keys: |
-          ${{ runner.os }}-go-
+          ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
 
     # Install dependencies
     - name: Install dependencies
@@ -58,26 +55,27 @@ jobs:
         mkdir -p build/windows
         GOOS=windows GOARCH=amd64 go build -o build/windows/git-sync.exe ./cmd/
 
-    # Package application for Linux
-    - name: Package for Linux
+    # Build for macOS
+    - name: Build for macOS
       run: |
-        tar -czvf build/git-sync-linux.tar.gz -C build/linux git-sync
-
-    # Package application for Windows
-    - name: Package for Windows
-      run: |
-        zip -j build/git-sync-win64.zip build/windows/git-sync.exe
-
-    # Upload Linux artifact
+        mkdir -p build/macos
+        GOOS=darwin GOARCH=amd64 go build -o build/macos/git-sync ./cmd/
+        
+    # Upload artifacts
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
       with:
-        name: git-sync-linux
+        name: git-sync-linux-amd64
         path: build/linux/git-sync
 
-    # Upload Windows artifact
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
-        name: git-sync-win64
+        name: git-sync-windows-amd64
         path: build/windows/git-sync.exe
+
+    - name: Upload macOS artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: git-sync-macos-amd64
+        path: build/macos/git-sync
