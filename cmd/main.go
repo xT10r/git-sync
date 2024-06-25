@@ -12,15 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
-Это main пакет - точка входа приложения. Он импортирует другие пакеты, собирает конфиг, запускает логгер и основную логику приложения.
-Также в проекте могут быть пакеты docs, deploy, scripts для документации, деплоя и вспомогательных скриптов соответственно.
-*/
-
 package main
 
 import (
 	"context"
+	"fmt"
 	"git-sync/git"
 	"git-sync/internal/flags"
 	"git-sync/internal/gitsync"
@@ -39,6 +35,21 @@ func main() {
 	defer cancel()
 
 	flagSet := flags.NewConsoleFlags()
+
+	// Проверка, были ли заданый обязательные флаги
+	if err := flagSet.CheckRequiredFlags(); err != nil {
+		logger.GetLogger().Error("%v", err)
+		fmt.Printf("\n")
+		flagSet.Gitsync.PrintDefaults()
+		os.Exit(0)
+	}
+
+	// Проверка правильности заполнения флагов
+	if err := flagSet.ValidateFlags(); err != nil {
+		logger.GetLogger().Error("%v", err)
+		os.Exit(0)
+	}
+
 	gitSync, err := gitsync.NewGitSync(flagSet.Gitsync, ctx)
 	if err != nil {
 		logger.GetLogger().Error("Ошибка при создании объекта GitSync: %v\n", err)
