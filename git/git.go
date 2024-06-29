@@ -114,7 +114,7 @@ func (ci *CommitInfo) AddChange(changeType, fileName, fromHash, toHash string) {
 	ci.Changes = append(ci.Changes, change)
 }
 
-// NewSyncOptions создает экземпляр SyncOptions с значениями по умолчанию.
+// NewGitRepository создает экземпляр GitRepository с значениями по умолчанию.
 func NewGitRepository(fs *flag.FlagSet) (*GitRepository, error) {
 
 	// Если flagSet не укзан, возвращаем ошибку
@@ -126,16 +126,16 @@ func NewGitRepository(fs *flag.FlagSet) (*GitRepository, error) {
 	getFlagValue := func(name string) (string, error) {
 		f := fs.Lookup(name)
 		if f == nil {
-			return "", fmt.Errorf("флаг %s не определён", name)
+			return "", fmt.Errorf("flag %s is not defined", name)
 		}
-		// .Value.(flag.Getter).Get()
 		value := f.Value.(flag.Getter).Get().(string)
 		if value == "" {
-			return "", fmt.Errorf("флаг %s пустой", name)
+			return "", fmt.Errorf("flag %s is empty", name)
 		}
 		return value, nil
 	}
 
+	// Получение значений обязательных флагов
 	url, err := getFlagValue(constants.FlagRepoUrl)
 	if err != nil {
 		return nil, err
@@ -151,15 +151,9 @@ func NewGitRepository(fs *flag.FlagSet) (*GitRepository, error) {
 		return nil, err
 	}
 
-	user, err := getFlagValue(constants.FlagRepoAuthUser)
-	if err != nil {
-		return nil, err
-	}
-
-	token, err := getFlagValue(constants.FlagRepoAuthToken)
-	if err != nil {
-		return nil, err
-	}
+	// Получение значений необязательных флагов
+	user := fs.Lookup(constants.FlagRepoAuthUser).Value.(flag.Getter).Get().(string)
+	token := fs.Lookup(constants.FlagRepoAuthToken).Value.(flag.Getter).Get().(string)
 
 	options := &GitRepositoryOptions{
 		url:        url,
@@ -598,7 +592,7 @@ func (gitRepo *GitRepository) showCommitMessage() error {
 
 	// Проверка наличия сохраненного коммита
 	if gitRepo.currentCommit == nil {
-		return fmt.Errorf("не удалось получить сохраненный коммит")
+		return fmt.Errorf("failed to retrieve the saved commit")
 	}
 
 	// Получение информации о последнем коммите
