@@ -5,7 +5,7 @@ COPY . /src
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o git-sync ./cmd/
 
 # Stage 2: Create the final image
-FROM alpine:latest
+FROM alpine:3.20
 
 ARG GITSYNC_REPOSITORY_URL="" \
     GITSYNC_REPOSITORY_BRANCH="main" \
