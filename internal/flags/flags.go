@@ -84,7 +84,7 @@ func (cf *ConsoleFlags) CheckRequiredFlags() error {
 	}
 
 	if len(missingFlags) > 0 {
-		return fmt.Errorf("не заданы обязательные параметры запуска: %v", strings.Join(missingFlags, ", "))
+		return fmt.Errorf("required flags are missing: %v", strings.Join(missingFlags, ", "))
 	}
 	return nil
 
@@ -93,7 +93,6 @@ func (cf *ConsoleFlags) CheckRequiredFlags() error {
 func (consoleFlags *ConsoleFlags) ValidateFlags() error {
 
 	if err := validateFlags(consoleFlags.Gitsync); err != nil {
-		logger.GetLogger().Error("%v", err)
 		return err
 	}
 	return nil
@@ -176,7 +175,7 @@ func validateFlagURL(fs *flag.FlagSet, fn string, desc string) error {
 	// Проверка корректности указанного URL
 	_, err := url.ParseRequestURI(repoUrl)
 	if err != nil {
-		return fmt.Errorf("неверный формат URL-ссылки: %s", err)
+		return fmt.Errorf("invalid URL format: %s", err)
 	}
 	return nil
 }
@@ -190,7 +189,7 @@ func validateFlagLocalPath(fs *flag.FlagSet, fn string, desc string) error {
 	}
 
 	if _, err := os.Stat(localPath); os.IsNotExist(err) {
-		return fmt.Errorf("указанный путь не существует: %s", localPath)
+		return fmt.Errorf("specified local path does not exist: %s", localPath)
 	}
 	return nil
 }
@@ -211,10 +210,10 @@ func validateFlagSyncInterval(fs *flag.FlagSet, fn string, desc string) error {
 	}
 
 	if duration, err := time.ParseDuration(fv); err != nil {
-		return fmt.Errorf("не удалось привести строковое значение интервала синхронизации к длительности")
+		return fmt.Errorf("failed to convert sync interval string to duration")
 	} else {
 		if duration <= 0 {
-			return fmt.Errorf("интервал синхронизации должен быть положительным")
+			return fmt.Errorf("sync interval must be positive")
 		}
 	}
 	return nil
@@ -232,19 +231,19 @@ func validateFlagsHttpServer(fs *flag.FlagSet) error {
 	// Разделение адреса на IP и порт
 	parts := strings.Split(httpServerAddr, ":")
 	if len(parts) != 2 {
-		return fmt.Errorf("адрес должен быть в формате IP:PORT")
+		return fmt.Errorf("address must be in the format IP:PORT")
 	}
 
 	// Проверка корректности IP адреса
 	ip := net.ParseIP(parts[0])
 	if ip == nil {
-		return fmt.Errorf("некорректный IP адрес")
+		return fmt.Errorf("invalid HTTP server IP-address")
 	}
 
 	// Проверка корректности порта
 	port, err := strconv.Atoi(parts[1])
 	if err != nil || port < 1 || port > 65535 {
-		return fmt.Errorf("некорректный порт. Допустимый диапазон портов [1-65535]")
+		return fmt.Errorf("invalid port. Valid port range is [1-65535]")
 	}
 
 	// HTTP Server Auth username
@@ -255,7 +254,7 @@ func validateFlagsHttpServer(fs *flag.FlagSet) error {
 	token, _ := getFlagValue(fs, constants.FlagHttpServerAuthToken)
 
 	if len(username) == 0 && len(password) == 0 && len(token) == 0 {
-		logger.GetLogger().Warning("HTTP-сервер: аутентификация не активна")
+		logger.GetLogger().Warning("HTTP server: authentication is not enabled")
 	}
 
 	return nil

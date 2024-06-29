@@ -46,7 +46,7 @@ func WebhookHandlerFunc(w http.ResponseWriter, r *http.Request) {
 
 	// Формируем JSON-структуру с сообщением и временем
 	response := &WebhookResponse{
-		Message: "Синхронизация запущена по вебхуку",
+		Message: "Synchronization triggered by webhook",
 		Time:    time.Now(),
 	}
 
@@ -57,8 +57,8 @@ func WebhookHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	err := json.NewEncoder(w).Encode(response)
 	if err != nil {
-		// В случае ошибки кодируем сообщение об ошибке в текстовом формате
-		http.Error(w, fmt.Sprintf("Ошибка кодирования JSON: %v", err), http.StatusInternalServerError)
+		// В случае ошибки выводим сообщение об ошибке в текстовом формате
+		http.Error(w, fmt.Sprintf("JSON encoding error: %v", err), http.StatusInternalServerError)
 		return
 	}
 }

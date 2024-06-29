@@ -52,13 +52,13 @@ func main() {
 
 	gitSync, err := gitsync.NewGitSync(flagSet.Gitsync, ctx)
 	if err != nil {
-		logger.GetLogger().Error("Ошибка при создании объекта GitSync: %v\n", err)
+		logger.GetLogger().Error("Error creating GitSync object: %v\n", err)
 		return
 	}
 
 	gitRepo, err := git.NewGitRepository(flagSet.Gitsync)
 	if err != nil {
-		logger.GetLogger().Error("Ошибка при создании объекта GitRepository: %v\n", err)
+		logger.GetLogger().Error("Error creating GitRepository object: %v\n", err)
 		return
 	}
 
@@ -86,5 +86,5 @@ func waitForSignals(cancel context.CancelFunc) {
 
 	// Ожидаем сигналы
 	sig := <-signalChan
-	logger.GetLogger().Info("Получен сигнал %s. Завершение программы...\n", sig)
+	logger.GetLogger().Info("Received signal %s. Shutting down...\n", sig)
 }

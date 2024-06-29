@@ -39,7 +39,7 @@ func registerHandler(path string, handler http.Handler, handlerFunc http.Handler
 		http.HandleFunc(path, handlerFunc)
 		registeredPaths[path] = true
 	} else {
-		panic("registerHandler: не передан хэндлер или функция хэндлера")
+		panic("registerHandler: handler or handler function not provided")
 	}
 
 	if path == "/" {
@@ -91,7 +91,7 @@ func rootHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(paths)
 
 	// Выводим список хендлеров на основной странице
-	fmt.Fprintf(w, "<h1>Список доступных хэндлеров:</h1>\n<ul>\n")
+	fmt.Fprintf(w, "<h1>List of available handlers:</h1>\n<ul>\n")
 	for _, path := range paths {
 		fmt.Fprintf(w, "<li><a href=\"%s\">%s</a></li>\n", path, path)
 	}
@@ -109,10 +109,10 @@ func StartServer(f *flag.FlagSet, ctx context.Context) {
 	useBaererToken := len(bearerToken) > 0
 
 	if len(addr) == 0 {
-		logger.GetLogger().Info("HTTP-сервер: не запущен\n")
+		logger.GetLogger().Info("HTTP server: not started\n")
 		return
 	} else {
-		logger.GetLogger().Info("HTTP-сервер: http://%s", addr)
+		logger.GetLogger().Info("HTTP server: http://%s", addr)
 	}
 
 	chain := alice.New()
@@ -120,16 +120,16 @@ func StartServer(f *flag.FlagSet, ctx context.Context) {
 	if useBasicAuth {
 		chain = chain.Append(basicAuthMiddleware(basicUsername, basicPassword))
 		if basicUsername == basicPassword && len(basicUsername) > 0 {
-			logger.GetLogger().Warning("HTTP-сервер: базовая аутентификация (небезопасный пароль)\n")
+			logger.GetLogger().Warning("HTTP server: basic authentication (unsafe password)\n")
 		} else {
-			logger.GetLogger().Info("HTTP-сервер: базовая аутентификация\n")
+			logger.GetLogger().Info("HTTP server: basic authentication\n")
 		}
 
 	} else if !useBasicAuth && useBaererToken {
 		chain = chain.Append(bearerAuthMiddleware(bearerToken))
-		logger.GetLogger().Info("HTTP-сервер: аутентификация по токену\n")
+		logger.GetLogger().Info("HTTP server: token authentication\n")
 	} else {
-		logger.GetLogger().Info("HTTP-сервер: без аутентификации\n")
+		logger.GetLogger().Info("HTTP server: no authentication\n")
 	}
 
 	registerHandler("/metrics", chain.Then(handlers.MetricsHandler()), nil)
