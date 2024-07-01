@@ -23,6 +23,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// Сообщение о срабатывании вебхука
+const WebhookTriggeredMessage = "Synchronization triggered by webhook"
+
 // Канал для вебхука
 var WebhookCh = make(chan string, 1)
 
@@ -46,7 +49,7 @@ func WebhookHandlerFunc(w http.ResponseWriter, r *http.Request) {
 
 	// Формируем JSON-структуру с сообщением и временем
 	response := &WebhookResponse{
-		Message: "Synchronization triggered by webhook",
+		Message: WebhookTriggeredMessage,
 		Time:    time.Now(),
 	}
 

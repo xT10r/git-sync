@@ -62,9 +62,8 @@ func TestWebhookHandlerFunc(t *testing.T) {
 	}
 
 	// Проверяем, что сообщение в теле ответа соответствует ожидаемому
-	expectedMessage := "Синхронизация запущена по вебхуку"
-	if response.Message != expectedMessage {
-		t.Errorf("handler returned unexpected message: got %v, want %v", response.Message, expectedMessage)
+	if response.Message != handlers.WebhookTriggeredMessage {
+		t.Errorf("handler returned unexpected message: got %v, want %v", response.Message, handlers.WebhookTriggeredMessage)
 	}
 
 	// Проверяем, что IP-адрес был отправлен в канал

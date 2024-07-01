@@ -175,7 +175,7 @@ func validateFlagURL(fs *flag.FlagSet, fn string, desc string) error {
 	// Проверка корректности указанного URL
 	_, err := url.ParseRequestURI(repoUrl)
 	if err != nil {
-		return fmt.Errorf("invalid URL format: %s", err)
+		return err
 	}
 	return nil
 }
