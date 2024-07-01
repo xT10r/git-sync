@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    uses: ./.github/workflows/common.yml@test
+    uses: ./.github/workflows/common.yml@develop-action
 
   release:
     name: Create Release
