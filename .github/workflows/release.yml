@@ -41,6 +41,22 @@ jobs:
           mkdir -p build/macos
           GOOS=darwin GOARCH=amd64 go build -o build/osx/x64/git-sync ./cmd/
 
+      # Create tar.gz archive for Linux x64
+      - name: Create tar.gz for Linux x64
+        run: |
+          tar -czvf build/git-sync-linux-amd64.tar.gz -C build/linux/x64 git-sync
+
+      # Create zip archive for Windows x64
+      - name: Create zip for Windows x64
+        run: |
+          zip -j build/git-sync-windows-x64.zip build/windows/x64/git-sync.exe
+
+      # Create tar.gz archive for OSX x64
+      - name: Create tar.gz for OSX x64
+        run: |
+          tar -czvf build/git-sync-osx-x64.tar.gz -C build/macos git-sync
+
+
       # Extract release notes from CHANGELOG.md
       - name: Extract release notes
         id: extract_release_notes
@@ -64,33 +80,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Upload artifacts
-      - name: Upload Linux x64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: git-sync-linux-amd64
-          path: build/linux/x64/git-sync
-
-      - name: Upload Windows x64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: git-sync-windows-x64
-          path: build/windows/x64/git-sync.exe
-
-      - name: Upload OSX x64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: git-sync-osx-x64
-          path: build/osx/x64/git-sync
-      
-      # Upload release assets
+      # Upload artifacts to release
       - name: Upload Linux x64 to release
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/linux/x64/git-sync
-          asset_name: git-sync-linux-amd64
-          asset_content_type: application/octet-stream
+          asset_path: build/git-sync-linux-amd64.tar.gz
+          asset_name: git-sync-linux-amd64.tar.gz
+          asset_content_type: application/gzip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -98,9 +95,9 @@ jobs:
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/windows/x64/git-sync.exe
-          asset_name: git-sync-windows-x64
-          asset_content_type: application/octet-stream
+          asset_path: build/git-sync-windows-x64.zip
+          asset_name: git-sync-windows-x64.zip
+          asset_content_type: application/zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -108,9 +105,9 @@ jobs:
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/osx/x64/git-sync
-          asset_name: git-sync-osx-x64
-          asset_content_type: application/octet-stream
+          asset_path: build/git-sync-osx-x64.tar.gz
+          asset_name: git-sync-osx-x64.tar.gz
+          asset_content_type: application/gzip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
