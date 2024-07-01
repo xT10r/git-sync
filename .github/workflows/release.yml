@@ -38,7 +38,7 @@ jobs:
       # Build for OSX x64
       - name: Build for OSX x64
         run: |
-          mkdir -p build/osx
+          mkdir -p build/osx/x64
           GOOS=darwin GOARCH=amd64 go build -o build/osx/x64/git-sync ./cmd/
 
       # Create tar.gz archive for Linux x64
