@@ -24,26 +24,30 @@
 
 Параметры командной строки / переменные окружения:
 
-`--local-path` / `GITSYNC_LOCAL_PATH`: Путь к локальному репозиторию.
-`--repo-url` / `GITSYNC_REPOSITORY_URL`: URL удаленного репозитория.
-`--repo-branch` / `GITSYNC_REPOSITORY_BRANCH`: Ветка удаленного репозитория.
-`--repo-auth-user` / `GITSYNC_REPOSITORY_USER`: Пользователь для аутентификации в репозитории.
-`--repo-auth-token` / `GITSYNC_REPOSITORY_TOKEN`: Токен для аутентификации в репозитории.
-`--sync-interval` / `GITSYNC_INTERVAL`: Интервал синхронизации репозитория.
-`--http-server-addr` / `GITSYNC_HTTP_SERVER_ADDR`: Адрес и порт HTTP сервера.
-`--http-server-auth-username` / `GITSYNC_HTTP_SERVER_AUTH_USERNAME`: Имя пользователя для аутентификации HTTP сервера.
-`--http-server-auth-password` / `GITSYNC_HTTP_SERVER_AUTH_PASSWORD`: Пароль для аутентификации HTTP сервера.
-`--http-server-auth-token` / `GITSYNC_HTTP_SERVER_AUTH_TOKEN`: Токен Bearer для аутентификации HTTP сервера.
+|Аргумент командной строки (флаг)|Переменная окружения|Описание|
+|-|-|-|
+|`--local-path`|`GITSYNC_LOCAL_PATH`|Путь к локальному репозиторию.|
+|`--repo-url`|`GITSYNC_REPOSITORY_URL`|URL удаленного репозитория.|
+|`--repo-branch`|`GITSYNC_REPOSITORY_BRANCH`|Ветка удаленного репозитория.|
+|`--repo-auth-user`|`GITSYNC_REPOSITORY_USER`|Пользователь для аутентификации в репозитории.|
+|`--repo-auth-token`|`GITSYNC_REPOSITORY_TOKEN`|Токен для аутентификации в репозитории.|
+|`--sync-interval`|`GITSYNC_INTERVAL`|Интервал синхронизации репозитория.|
+|`--http-server-addr`|`GITSYNC_HTTP_SERVER_ADDR`|Адрес и порт HTTP сервера.|
+|`--http-server-auth-username`|`GITSYNC_HTTP_SERVER_AUTH_USERNAME`|Имя пользователя для аутентификации HTTP сервера.|
+|`--http-server-auth-password`|`GITSYNC_HTTP_SERVER_AUTH_PASSWORD`|Пароль для аутентификации HTTP сервера.|
+|`--http-server-auth-token`|`GITSYNC_HTTP_SERVER_AUTH_TOKEN`|Токен для аутентификации HTTP сервера.|
 
 ## Метрики Prometheus
 
 Сервис предоставляет следующие метрики:
 
-`git_sync_sync_count`: Общее количество синхронизаций с изменениями.
-`git_sync_sync_total_count`: Общее количество синхронизаций.
-`git_sync_sync_total_error_count`: Общее количество ошибок синхронизации.
-`git_sync_repo_info`: Информация о синхронизированном репозитории с метками `имени репозитория` и `ветки`.
-`git_sync_commit_info`: Информация о последнем коммите с метками `хеш коммита`, `имя автора`, `электронная почта автора`, `дата коммита`, `сообщение коммита`
+|Наименование|Описание|
+|-|-|
+|`git_sync_sync_count`|Общее количество синхронизаций с изменениями.|
+|`git_sync_sync_total_count`|Общее количество синхронизаций.|
+|`git_sync_sync_total_error_count`|Общее количество ошибок синхронизации.|
+|`git_sync_repo_info`|Информация о синхронизированном репозитории с метками `имени репозитория` и `ветки`.|
+|`git_sync_commit_info`|Информация о последнем коммите с метками `хеш коммита`, `имя автора`, `электронная почта автора`, `дата коммита`, `сообщение коммита`|
 
 ## Примеры использования
 

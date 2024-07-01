@@ -24,26 +24,30 @@ Each environment variable is mapped to the corresponding command-line parameter 
 
 Command-Line Parameters / Environment Variables
 
-`--local-path` / `GITSYNC_LOCAL_PATH`: Path to the local repository.
-`--repo-url` / `GITSYNC_REPOSITORY_URL`: URL of the remote repository.
-`--repo-branch` / `GITSYNC_REPOSITORY_BRANCH`: Branch of the remote repository.
-`--repo-auth-user` / `GITSYNC_REPOSITORY_USER`: User for repository authentication.
-`--repo-auth-token` / `GITSYNC_REPOSITORY_TOKEN`: Token for repository authentication.
-`--sync-interval` / `GITSYNC_INTERVAL`: Interval for repository synchronization.
-`--http-server-addr` / `GITSYNC_HTTP_SERVER_ADDR`: Address and port of the HTTP server.
-`--http-server-auth-username` / `GITSYNC_HTTP_SERVER_AUTH_USERNAME`: Username for HTTP server authentication.
-`--http-server-auth-password` / `GITSYNC_HTTP_SERVER_AUTH_PASSWORD`: Password for HTTP server authentication.
-`--http-server-auth-token` / `GITSYNC_HTTP_SERVER_AUTH_TOKEN`: Bearer token for HTTP server authentication.
+|Command Argument (flag)|Environment variable|Description|
+|-|-|-|
+|`--local-path`|`GITSYNC_LOCAL_PATH`|Path to the local repository.|
+|`--repo-url`|`GITSYNC_REPOSITORY_URL`|URL of the remote repository.|
+|`--repo-branch`|`GITSYNC_REPOSITORY_BRANCH`|Branch of the remote repository.|
+|`--repo-auth-user`|`GITSYNC_REPOSITORY_USER`|User for repository authentication.|
+|`--repo-auth-token`|`GITSYNC_REPOSITORY_TOKEN`|Token for repository authentication.|
+|`--sync-interval`|`GITSYNC_INTERVAL`|Interval for repository synchronization.|
+|`--http-server-addr`|`GITSYNC_HTTP_SERVER_ADDR`|Address and port of the HTTP server.|
+|`--http-server-auth-username`|`GITSYNC_HTTP_SERVER_AUTH_USERNAME`|Username for HTTP server authentication.|
+|`--http-server-auth-password`|`GITSYNC_HTTP_SERVER_AUTH_PASSWORD`|Password for HTTP server authentication.|
+|`--http-server-auth-token`|`GITSYNC_HTTP_SERVER_AUTH_TOKEN`|Token for HTTP server authentication.|
 
 ### Prometheus Metrics
 
 The service provides the following metrics:
 
-`git_sync_sync_count`: Total number of synchronizations with changes.
-`git_sync_sync_total_count`: Total number of synchronizations.
-`git_sync_sync_total_error_count`: Total number of synchronization errors.
-`git_sync_repo_info`: Information about the synchronized repository with labels for `repository name` and `repository branch`.
-`git_sync_commit_info`: Information about the latest commit with labels for `commit hash`, `author name`, `author email`, `commit date`, `commit message`.
+|Name|Description|
+|-|-|
+|`git_sync_sync_count`|Total number of synchronizations with changes.|
+|`git_sync_sync_total_count`|Total number of synchronizations.|
+|`git_sync_sync_total_error_count`|Total number of synchronization errors.|
+|`git_sync_repo_info`|Information about the synchronized repository with labels for `repository name` and `repository branch`.|
+|`git_sync_commit_info`|Information about the latest commit with labels for `commit hash`, `author name`, `author email`, `commit date`, `commit message`.|
 
 ### Use Cases
 
