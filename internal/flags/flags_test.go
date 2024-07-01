@@ -122,7 +122,7 @@ func TestValidateFlagURL(t *testing.T) {
 			flagName:  "invalidURLFlag",
 			flagValue: "invalid-url",
 			desc:      "Invalid URL Flag",
-			expected:  fmt.Errorf("неверный формат URL-ссылки: parse \"invalid-url\": invalid URI for request"),
+			expected:  fmt.Errorf("parse \"invalid-url\": invalid URI for request"),
 		},
 	}
 
