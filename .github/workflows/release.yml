@@ -46,12 +46,12 @@ jobs:
         id: extract_release_notes
         run: |
           VERSION="${GITHUB_REF#refs/tags/}"
-          awk "/## \[$VERSION\]/,/^## /" CHANGELOG.md | sed '$d' > release_notes.md
+          awk '/## \['"$VERSION"'\]/,/^$/' CHANGELOG.md > release_notes.md
 
       # Create a new release
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: actions/create-release@v1.1.4
         with:
           tag_name: ${{ github.ref_name }}
           release_name: Release ${{ github.ref_name }}
@@ -79,17 +79,18 @@ jobs:
         with:
           name: git-sync-osx-amd64
           path: build/osx/x64/git-sync
-
+      
+      # Docker release
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
 
       # Login docker registry
       - name: Log in to Docker Hub
         if: success() && startsWith(github.ref, 'refs/tags/')
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
@@ -97,7 +98,7 @@ jobs:
       # Build and push Docker image
       - name: Build and push Docker image
         if: startsWith(github.ref, 'refs/tags/')
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
