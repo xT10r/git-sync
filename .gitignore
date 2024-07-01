@@ -1,0 +1,10 @@
+*.iml
+.idea
+*.bak
+.vscode/**/*
+.vscode/launch.json
+logic.md
+Dockerfile.example
+.config/**/*
+internal/config/config.go
+fmtcoverage.html
