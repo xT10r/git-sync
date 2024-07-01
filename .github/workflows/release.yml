@@ -45,8 +45,11 @@ jobs:
       - name: Extract release notes
         id: extract_release_notes
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
-          awk '/## \['"$VERSION"'\]/,/^$/' CHANGELOG.md > release_notes.md
+          VERSION=${GITHUB_REF#refs/tags/}
+          awk '/## \['"$VERSION"'\]/,/^## \[/' CHANGELOG.md | sed '$d' > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            awk '/## \['"$VERSION"'\]/,/^$/' CHANGELOG.md > release_notes.md
+          fi
 
       # Create a new release
       - name: Create Release
@@ -71,15 +74,46 @@ jobs:
       - name: Upload Windows x64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: git-sync-windows-amd64
+          name: git-sync-windows-x64
           path: build/windows/x64/git-sync.exe
 
       - name: Upload OSX x64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: git-sync-osx-amd64
+          name: git-sync-osx-x64
           path: build/osx/x64/git-sync
       
+      # Upload release assets
+      - name: Upload Linux x64 to release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build/linux/x64/git-sync
+          asset_name: git-sync-linux-amd64
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows x64 to release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build/windows/x64/git-sync.exe
+          asset_name: git-sync-windows-x64
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload OSX x64 to release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build/osx/x64/git-sync
+          asset_name: git-sync-osx-x64
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       # Docker release
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
