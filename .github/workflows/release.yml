@@ -1,0 +1,171 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4.1.7
+
+    - name: Set up Go
+      uses: actions/setup-go@v5.0.1
+      with:
+        go-version: '1.21'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Run tests
+      run: go test -cover ./...
+
+  build:
+    name: Build Artifacts
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4.1.7
+
+    - name: Set up Go
+      uses: actions/setup-go@v5.0.1
+      with:
+        go-version: '1.21'
+
+    - name: Build for Linux x64
+      run: |
+        mkdir -p build/linux/x64
+        GOOS=linux GOARCH=amd64 go build -o build/linux/x64/git-sync ./cmd/
+
+    - name: Build for Windows x64
+      run: |
+        mkdir -p build/windows/x64
+        GOOS=windows GOARCH=amd64 go build -o build/windows/x64/git-sync.exe ./cmd/
+
+    - name: Build for OSX x64
+      run: |
+        mkdir -p build/macos
+        GOOS=darwin GOARCH=amd64 go build -o build/osx/x64/git-sync ./cmd/
+
+    - name: Upload Linux x64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: git-sync-linux-amd64
+        path: build/linux/x64/git-sync
+
+    - name: Upload Windows x64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: git-sync-windows-amd64
+        path: build/windows/x64/git-sync.exe
+
+    - name: Upload OSX x64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: git-sync-osx-amd64
+        path: build/osx/x64/git-sync
+
+  create_release:
+    name: Create Release
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4.1.7
+
+    - name: Set up Go
+      uses: actions/setup-go@v5.0.1
+      with:
+        go-version: '1.21'
+
+    - name: Get release notes
+      id: get_release_notes
+      run: |
+        echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+        grep -A1000 "## \[${GITHUB_REF/refs\/tags\//}\]" CHANGELOG.md | tail -n +2 | sed '/^## \[/Q' >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
+    - name: Create GitHub release
+      uses: actions/create-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: ${{ github.ref_name }}
+        body: ${{ env.RELEASE_NOTES }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Linux x64 artifact to release
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: build/linux/x64/git-sync
+        asset_name: git-sync-linux-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload Windows x64 artifact to release
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: build/windows/x64/git-sync.exe
+        asset_name: git-sync-windows-amd64.exe
+        asset_content_type: application/octet-stream
+
+    - name: Upload OSX x64 artifact to release
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: build/osx/x64/git-sync
+        asset_name: git-sync-osx-amd64
+        asset_content_type: application/octet-stream
+
+  docker:
+    name: Build and Push Docker Image
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4.1.7
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Log in to Docker Hub
+      if: success() && startsWith(github.ref, 'refs/tags/')
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push Docker image
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile
+        platforms: linux/amd64
+        push: true
+        tags: |
+          xt10r/git-sync:${{ github.ref_name }}
+
+    - name: Clean up
+      run: |
+        docker image prune -f
