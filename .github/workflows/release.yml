@@ -38,7 +38,7 @@ jobs:
       # Build for OSX x64
       - name: Build for OSX x64
         run: |
-          mkdir -p build/macos
+          mkdir -p build/osx
           GOOS=darwin GOARCH=amd64 go build -o build/osx/x64/git-sync ./cmd/
 
       # Create tar.gz archive for Linux x64
@@ -54,7 +54,7 @@ jobs:
       # Create tar.gz archive for OSX x64
       - name: Create tar.gz for OSX x64
         run: |
-          tar -czvf build/git-sync-osx-x64.tar.gz -C build/macos git-sync
+          tar -czvf build/git-sync-osx-x64.tar.gz -C build/osx/x64/git-sync
 
 
       # Extract release notes from CHANGELOG.md
