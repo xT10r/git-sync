@@ -54,7 +54,7 @@ jobs:
       # Create tar.gz archive for OSX x64
       - name: Create tar.gz for OSX x64
         run: |
-          tar -czvf build/git-sync-osx-x64.tar.gz -C build/osx/x64/git-sync
+          tar -czvf build/git-sync-osx-x64.tar.gz -C build/osx/x64 git-sync
 
 
       # Extract release notes from CHANGELOG.md
