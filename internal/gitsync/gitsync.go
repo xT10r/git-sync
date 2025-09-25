@@ -17,12 +17,13 @@ package gitsync
 import (
 	"context"
 	"flag"
-	"git-sync/internal/constants"
+	"time"
+
+	"git-sync/internal/config"
 	"git-sync/internal/handlers"
 	"git-sync/internal/interfaces"
 	"git-sync/internal/metrics"
 	"git-sync/logger"
-	"time"
 )
 
 type GitSync struct {
@@ -30,12 +31,14 @@ type GitSync struct {
 	interval time.Duration // Интервал обновления репозитория
 }
 
-// NewGitSync создает экземпляр SyncOptions с значениями по умолчанию.
-func NewGitSync(f *flag.FlagSet, ctx context.Context) (*GitSync, error) {
+// NewGitSync creates a new GitSync instance with values from the provided config.
+func NewGitSync(f *flag.FlagSet, cfg *config.Config, ctx context.Context) (*GitSync, error) {
+	// Use the interval from the unified configuration
+	interval := time.Duration(cfg.Sync.Interval) * time.Second
 
 	gitSync := &GitSync{
 		ctx:      ctx,
-		interval: f.Lookup(constants.FlagSyncInterval).Value.(flag.Getter).Get().(time.Duration),
+		interval: interval,
 	}
 
 	return gitSync, nil

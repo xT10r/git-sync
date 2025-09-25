@@ -1,10 +1,23 @@
+# IDE and Editor files
 *.iml
 .idea
 *.bak
 .vscode/**/*
 .vscode/launch.json
+
+# Configuration and local files
+.config/**/*
+config.yaml
+config.json
+
+# Documentation and example files
 logic.md
 Dockerfile.example
-.config/**/*
-internal/config/config.go
+
+# Test and coverage files
 fmtcoverage.html
+
+# SonarLint files
+.sonarlint
+.sonarlint/**/*
+

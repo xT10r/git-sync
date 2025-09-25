@@ -17,8 +17,6 @@ package git
 import (
 	"flag"
 	"fmt"
-	"git-sync/internal/constants"
-	"git-sync/logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +27,9 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
+
+	"git-sync/internal/config"
+	"git-sync/logger"
 )
 
 const (
@@ -115,45 +116,30 @@ func (ci *CommitInfo) AddChange(changeType, fileName, fromHash, toHash string) {
 }
 
 // NewGitRepository создает экземпляр GitRepository с значениями по умолчанию.
-func NewGitRepository(fs *flag.FlagSet) (*GitRepository, error) {
+func NewGitRepository(fs *flag.FlagSet, cfg *config.Config) (*GitRepository, error) {
 
-	// Если flagSet не укзан, возвращаем ошибку
+	// If flagSet is not specified, return an error
 	if fs == nil {
 		return nil, fmt.Errorf("FlagSet is nil")
 	}
 
-	// Функция для получения значения флага или ошибки
-	getFlagValue := func(name string) (string, error) {
-		f := fs.Lookup(name)
-		if f == nil {
-			return "", fmt.Errorf("flag %s is not defined", name)
-		}
-		value := f.Value.(flag.Getter).Get().(string)
-		if value == "" {
-			return "", fmt.Errorf("flag %s is empty", name)
-		}
-		return value, nil
-	}
+	// Use the unified configuration
+	url := cfg.Gitlab.RepoURL
+	branch := cfg.Gitlab.RepoBranch
+	path := cfg.Sync.LocalPath
+	user := cfg.Gitlab.RepoAuth.User
+	token := cfg.Gitlab.RepoAuth.Token
 
-	// Получение значений обязательных флагов
-	url, err := getFlagValue(constants.FlagRepoUrl)
-	if err != nil {
-		return nil, err
+	// Validate that required fields are not empty
+	if url == "" {
+		return nil, fmt.Errorf("repository URL is empty")
 	}
-
-	branch, err := getFlagValue(constants.FlagRepoBranch)
-	if err != nil {
-		return nil, err
+	if branch == "" {
+		return nil, fmt.Errorf("repository branch is empty")
 	}
-
-	path, err := getFlagValue(constants.FlagLocalPath)
-	if err != nil {
-		return nil, err
+	if path == "" {
+		return nil, fmt.Errorf("local path is empty")
 	}
-
-	// Получение значений необязательных флагов
-	user := fs.Lookup(constants.FlagRepoAuthUser).Value.(flag.Getter).Get().(string)
-	token := fs.Lookup(constants.FlagRepoAuthToken).Value.(flag.Getter).Get().(string)
 
 	options := &GitRepositoryOptions{
 		url:        url,
@@ -171,13 +157,13 @@ func NewGitRepository(fs *flag.FlagSet) (*GitRepository, error) {
 		currentCommit: nil,
 	}
 
-	// Получаем репозиторий
-	err = gitRepository.cloneOpenRepo()
+	// Get the repository
+	err := gitRepository.cloneOpenRepo()
 	if err != nil {
 		return nil, err
 	}
 
-	// Записываем текущий коммит
+	// Write the current commit
 	err = gitRepository.storeCurrentCommit("init")
 	if err != nil {
 		return nil, err
@@ -604,7 +590,22 @@ func (gitRepo *GitRepository) showCommitMessage() error {
 	authorEmail := gitRepo.currentCommit.Email
 
 	// Вывод информации о коммите в лог
-	logger.GetLogger().Info("%s %s %s (%s) %s %s\n", reason, commitHash, authorName, authorEmail, commitDate, commitMessage)
+	logger.Info("%s %s %s (%s) %s %s\n", reason, commitHash, authorName, authorEmail, commitDate, commitMessage)
 
 	return nil
+}
+
+// Test helpers - only for testing purposes
+// SetHasChangesForTest sets the hasChanges flag for testing
+func (gitRepo *GitRepository) SetHasChangesForTest(hasChanges bool) {
+	gitRepo.mutex.Lock()
+	defer gitRepo.mutex.Unlock()
+	gitRepo.hasChanges = hasChanges
+}
+
+// SetCurrentCommitForTest sets the currentCommit for testing
+func (gitRepo *GitRepository) SetCurrentCommitForTest(commit *CommitInfo) {
+	gitRepo.mutex.Lock()
+	defer gitRepo.mutex.Unlock()
+	gitRepo.currentCommit = commit
 }

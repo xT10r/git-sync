@@ -1,4 +1,9 @@
 .idea
+.config
+.vscode
+.git
+.gitignore
+.env
 *.iml
 /README.md
 /LICENSE

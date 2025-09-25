@@ -7,11 +7,7 @@ require (
 	github.com/spf13/viper v1.18.2
 )
 
-require (
-	github.com/arekkas/accurate-test-coverage v0.0.0-20170711090600-2fcab3a8a34f // indirect
-	golang.org/x/tools v0.20.0 // indirect
-	golang.org/x/tools/cmd/cover v0.1.0-deprecated // indirect
-)
+require github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 
 require (
 	dario.cat/mergo v1.0.0 // indirect

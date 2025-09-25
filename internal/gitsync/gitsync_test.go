@@ -16,6 +16,7 @@ package gitsync_test
 
 import (
 	"context"
+	"git-sync/internal/config"
 	"git-sync/internal/gitsync"
 	"git-sync/internal/handlers"
 	"git-sync/mock"
@@ -36,18 +37,22 @@ func TestStart(t *testing.T) {
 		t.Fatalf("error parsing flags: %v", err)
 	}
 
+	// Create a mock configuration
+	cfg := &config.Config{}
+	cfg.Sync.Interval = 30 // seconds
+
 	// Создаем фейковый контекст с отменой через 100 миллисекунд
 	fakeCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
 
 	// Создаем экземпляр gitsync с использованием макета флагов и фейкового контекста
-	gitSync, err := gitsync.NewGitSync(mockFlags, fakeCtx)
+	gitSync, err := gitsync.NewGitSync(mockFlags, cfg, fakeCtx)
 	if err != nil {
 		t.Fatalf("Error initializing GitSync: %v", err)
 	}
 
 	// Создаем мок Gitter
-	mockGitter := &mock.Gitter{}
+	mockGitter := mock.NewGitter()
 
 	// Запуск синхронизации в отдельной горутине
 	go gitSync.Start(mockGitter)

@@ -1,19 +1,3 @@
-<!--
- Copyright 2024 Aleksey Dobshikov
- 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
- 
-     https://www.apache.org/licenses/LICENSE-2.0
- 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
--->
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -22,7 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-...
+### Added
+- Debug logging support with `--debug` flag, `GITSYNC_DEBUG` environment variable, and `debug` config file option
+- Global logger functions (`logger.Info()`, `logger.Debug()`, `logger.Warning()`, `logger.Error()`, `logger.Fatal()`)
+- Debug mode control functions (`logger.SetDebug()`, `logger.IsDebug()`)
+- Enhanced documentation for debug logging feature
+- Configuration file support using Viper
+- Command to generate sample configuration files (`gen-config`)
+- Command to display configuration help (`config-help`)
+- Enhanced documentation for configuration options
+- Unified configuration system that integrates flags, environment variables, and config files
+- Comprehensive test suite with significant improvements to code coverage:
+  - internal/flags package: 37.6% → 95.0% coverage
+  - internal/config package: 0% → 83.7% coverage
+  - internal/metrics package: 0% → 100% coverage
+  - git package: 25.6% → 35.1% coverage
+
+### Changed
+- Improved configuration precedence (flags > environment variables > config file > defaults)
+- Removed internal/config/config.go from .gitignore as it's now actively used
 
 ## [v1.0.0] - 2024-07-01
 ### Added

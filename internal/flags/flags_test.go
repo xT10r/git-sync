@@ -222,6 +222,218 @@ func TestValidateFlagOptional(t *testing.T) {
 	}
 }
 
+// TestNewConsoleFlags tests the NewConsoleFlags function
+func TestNewConsoleFlags(t *testing.T) {
+	// Save original command line arguments
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	// Set up test arguments with valid flag names
+	os.Args = []string{"git-sync", "-repo-url=https://github.com/example/repo", "-repo-branch=main", "-local-path=/tmp"}
+
+	cf := NewConsoleFlags()
+	if cf == nil {
+		t.Fatal("NewConsoleFlags returned nil")
+	}
+
+	if cf.Gitsync == nil {
+		t.Error("Gitsync flag set is nil")
+	}
+}
+
+// TestParseFlags tests the ParseFlags function
+func TestParseFlags(t *testing.T) {
+	// Save original command line arguments
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	// Set up test arguments with valid flag names
+	os.Args = []string{"git-sync", "-repo-url=https://github.com/example/repo", "-repo-branch=main", "-local-path=/tmp"}
+
+	fs := ParseFlags()
+	if fs == nil {
+		t.Fatal("ParseFlags returned nil")
+	}
+
+	// Check that flags were parsed correctly
+	repoFlag := fs.Lookup("repo-url")
+	if repoFlag == nil {
+		t.Error("repo-url flag not found")
+	} else if repoFlag.Value.String() != "https://github.com/example/repo" {
+		t.Errorf("Expected repo flag value 'https://github.com/example/repo', got '%s'", repoFlag.Value.String())
+	}
+
+	branchFlag := fs.Lookup("repo-branch")
+	if branchFlag == nil {
+		t.Error("repo-branch flag not found")
+	} else if branchFlag.Value.String() != "main" {
+		t.Errorf("Expected branch flag value 'main', got '%s'", branchFlag.Value.String())
+	}
+
+	pathFlag := fs.Lookup("local-path")
+	if pathFlag == nil {
+		t.Error("local-path flag not found")
+	} else if pathFlag.Value.String() != "/tmp" {
+		t.Errorf("Expected path flag value '/tmp', got '%s'", pathFlag.Value.String())
+	}
+}
+
+// TestCheckRequiredFlags tests the CheckRequiredFlags method
+func TestCheckRequiredFlags(t *testing.T) {
+	// Test case 1: All required flags are set
+	t.Run("AllRequiredFlagsSet", func(t *testing.T) {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		fs.String("repo-url", "https://github.com/example/repo", "")
+		fs.String("repo-branch", "main", "")
+		fs.String("local-path", "/tmp", "")
+
+		cf := &ConsoleFlags{Gitsync: fs}
+		err := cf.CheckRequiredFlags()
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+	})
+
+	// Test case 2: Missing required flags
+	t.Run("MissingRequiredFlags", func(t *testing.T) {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		// Only set one of the required flags
+		fs.String("repo-url", "https://github.com/example/repo", "")
+		// repo-branch and local-path are missing
+
+		cf := &ConsoleFlags{Gitsync: fs}
+		err := cf.CheckRequiredFlags()
+		if err == nil {
+			t.Error("Expected error for missing required flags, got nil")
+		} else {
+			expectedError := "required flags are missing: repo-branch, local-path"
+			if err.Error() != expectedError {
+				t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+			}
+		}
+	})
+
+	// Test case 3: No flags set
+	t.Run("NoFlagsSet", func(t *testing.T) {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		// No flags set
+
+		cf := &ConsoleFlags{Gitsync: fs}
+		err := cf.CheckRequiredFlags()
+		if err == nil {
+			t.Error("Expected error for missing required flags, got nil")
+		} else {
+			expectedError := "required flags are missing: repo-url, repo-branch, local-path"
+			if err.Error() != expectedError {
+				t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+			}
+		}
+	})
+}
+
+// TestValidateFlags tests the ValidateFlags method
+func TestValidateFlags(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir := t.TempDir()
+
+	// Test case 1: Valid flags
+	t.Run("ValidFlags", func(t *testing.T) {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		fs.String("repo-url", "https://github.com/example/repo", "")
+		fs.String("repo-branch", "main", "")
+		fs.String("local-path", tempDir, "") // Use temp dir
+		fs.String("repo-user", "user", "")
+		fs.String("repo-token", "token", "")
+		fs.String("sync-interval", "1m", "")
+		fs.String("http-server-addr", "127.0.0.1:8080", "")
+		fs.String("http-auth-username", "httpuser", "")
+		fs.String("http-auth-password", "httppass", "")
+		fs.String("http-auth-token", "httptoken", "")
+
+		cf := &ConsoleFlags{Gitsync: fs}
+		err := cf.ValidateFlags()
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+	})
+
+	// Test case 2: Invalid URL
+	t.Run("InvalidURL", func(t *testing.T) {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		fs.String("repo-url", "invalid-url", "")
+		fs.String("repo-branch", "main", "")
+		fs.String("local-path", tempDir, "") // Use temp dir
+		fs.String("sync-interval", "1m", "")
+
+		cf := &ConsoleFlags{Gitsync: fs}
+		err := cf.ValidateFlags()
+		if err == nil {
+			t.Error("Expected error for invalid URL, got nil")
+		}
+	})
+
+	// Test case 3: Invalid path
+	t.Run("InvalidPath", func(t *testing.T) {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		fs.String("repo-url", "https://github.com/example/repo", "")
+		fs.String("repo-branch", "main", "")
+		fs.String("local-path", "/non/existent/path", "")
+		fs.String("sync-interval", "1m", "")
+
+		cf := &ConsoleFlags{Gitsync: fs}
+		err := cf.ValidateFlags()
+		if err == nil {
+			t.Error("Expected error for invalid path, got nil")
+		}
+	})
+
+	// Test case 4: Invalid interval
+	t.Run("InvalidInterval", func(t *testing.T) {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		fs.String("repo-url", "https://github.com/example/repo", "")
+		fs.String("repo-branch", "main", "")
+		fs.String("local-path", tempDir, "") // Use temp dir
+		fs.String("sync-interval", "invalid", "")
+
+		cf := &ConsoleFlags{Gitsync: fs}
+		err := cf.ValidateFlags()
+		if err == nil {
+			t.Error("Expected error for invalid interval, got nil")
+		}
+	})
+
+	// Test case 5: Negative interval
+	t.Run("NegativeInterval", func(t *testing.T) {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		fs.String("repo-url", "https://github.com/example/repo", "")
+		fs.String("repo-branch", "main", "")
+		fs.String("local-path", tempDir, "") // Use temp dir
+		fs.String("sync-interval", "-1m", "")
+
+		cf := &ConsoleFlags{Gitsync: fs}
+		err := cf.ValidateFlags()
+		if err == nil {
+			t.Error("Expected error for negative interval, got nil")
+		}
+	})
+
+	// Test case 6: Invalid HTTP server address
+	t.Run("InvalidHTTPServerAddr", func(t *testing.T) {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		fs.String("repo-url", "https://github.com/example/repo", "")
+		fs.String("repo-branch", "main", "")
+		fs.String("local-path", tempDir, "") // Use temp dir
+		fs.String("sync-interval", "1m", "")
+		fs.String("http-server-addr", "invalid-address", "")
+
+		cf := &ConsoleFlags{Gitsync: fs}
+		err := cf.ValidateFlags()
+		if err == nil {
+			t.Error("Expected error for invalid HTTP server address, got nil")
+		}
+	})
+}
+
 func TestValidateFlagSyncInterval(t *testing.T) {
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	fs.String("intervalFlag", "1m", "")
@@ -242,5 +454,74 @@ func TestValidateFlagsHttpServer(t *testing.T) {
 	err := validateFlagsHttpServer(fs)
 	if err != nil {
 		t.Errorf("Expected no error, got '%s'", err)
+	}
+}
+
+// TestGetEnvBool tests the getEnvBool function
+func TestGetEnvBool(t *testing.T) {
+	tests := []struct {
+		name         string
+		envKey       string
+		envValue     string
+		defaultValue bool
+		expected     bool
+	}{
+		{
+			name:         "Environment variable not set",
+			envKey:       "TEST_NOT_SET",
+			envValue:     "",
+			defaultValue: true,
+			expected:     true,
+		},
+		{
+			name:         "Environment variable set to true",
+			envKey:       "TEST_TRUE",
+			envValue:     "true",
+			defaultValue: false,
+			expected:     true,
+		},
+		{
+			name:         "Environment variable set to false",
+			envKey:       "TEST_FALSE",
+			envValue:     "false",
+			defaultValue: true,
+			expected:     false,
+		},
+		{
+			name:         "Environment variable set to 1",
+			envKey:       "TEST_ONE",
+			envValue:     "1",
+			defaultValue: false,
+			expected:     true,
+		},
+		{
+			name:         "Environment variable set to 0",
+			envKey:       "TEST_ZERO",
+			envValue:     "0",
+			defaultValue: true,
+			expected:     false,
+		},
+		{
+			name:         "Environment variable set to invalid value",
+			envKey:       "TEST_INVALID",
+			envValue:     "invalid",
+			defaultValue: true,
+			expected:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set environment variable if needed
+			if tt.envValue != "" {
+				os.Setenv(tt.envKey, tt.envValue)
+				defer os.Unsetenv(tt.envKey)
+			}
+
+			value := getEnvBool(tt.envKey, tt.defaultValue)
+			if value != tt.expected {
+				t.Errorf("Expected %v, got %v", tt.expected, value)
+			}
+		})
 	}
 }

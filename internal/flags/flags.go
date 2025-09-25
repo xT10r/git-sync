@@ -17,7 +17,7 @@ package flags
 import (
 	"flag"
 	"fmt"
-	"git-sync/internal/constants"
+	"git-sync/internal/config"
 	"git-sync/logger"
 	"net"
 	"net/url"
@@ -27,52 +27,50 @@ import (
 	"time"
 )
 
-// FlagSet представляет набор флагов командной строки.
+// ConsoleFlags represents a set of command-line flags.
 type ConsoleFlags struct {
 	Gitsync *flag.FlagSet
 }
 
-// NewConsoleFlags создает новый набор флагов командной строки.
+// NewConsoleFlags creates a new set of command-line flags.
 func NewConsoleFlags() *ConsoleFlags {
-
 	fs := ParseFlags()
-
 	return &ConsoleFlags{
 		Gitsync: fs,
 	}
 }
 
-// ParseFlags инициализирует флаги с помощью набора флагов командной строки.
+// ParseFlags initializes flags using a flag set.
 func ParseFlags() *flag.FlagSet {
-
 	fs := flag.NewFlagSet("git-sync", flag.ExitOnError)
 
-	fs.String(constants.FlagLocalPath, getEnv(constants.EnvLocalPath, ""), fmt.Sprintf("Путь к локальному репозиторию (%s)", constants.EnvLocalPath))
+	// Register all standard flags from the unified configuration
+	for _, flagInfo := range config.AllFlags {
+		switch flagInfo.Type {
+		case "duration":
+			fs.Duration(flagInfo.Name, getEnvDuration(flagInfo.EnvVar, 30*time.Second), fmt.Sprintf("%s (%s)", flagInfo.Description, flagInfo.EnvVar))
+		case "bool":
+			fs.Bool(flagInfo.Name, getEnvBool(flagInfo.EnvVar, false), fmt.Sprintf("%s (%s)", flagInfo.Description, flagInfo.EnvVar))
+		default:
+			fs.String(flagInfo.Name, getEnv(flagInfo.EnvVar, ""), fmt.Sprintf("%s (%s)", flagInfo.Description, flagInfo.EnvVar))
+		}
+	}
 
-	fs.String(constants.FlagRepoUrl, getEnv(constants.EnvRepoUrl, ""), fmt.Sprintf("URL удаленного репозитория (%s)", constants.EnvRepoUrl))
-	fs.String(constants.FlagRepoBranch, getEnv(constants.EnvRepoBranch, ""), fmt.Sprintf("Ветка удаленного репозитория (%s)", constants.EnvRepoBranch))
-	fs.String(constants.FlagRepoAuthUser, getEnv(constants.EnvRepoAuthUser, ""), fmt.Sprintf("Учетная запись (%s)", constants.EnvRepoAuthUser))
-	fs.String(constants.FlagRepoAuthToken, getEnv(constants.EnvRepoAuthToken, ""), fmt.Sprintf("Токен авторизации (%s)", constants.EnvRepoAuthToken))
-
-	fs.Duration(constants.FlagSyncInterval, getEnvDuration(constants.EnvSyncInterval, 30*time.Second), fmt.Sprintf("Интервал обновления репозитория (%s)", constants.EnvSyncInterval))
-
-	fs.String(constants.FlagHttpServerAddr, getEnv(constants.EnvHttpServerAddr, ""), fmt.Sprintf("Адрес http-сервера (+порт) (%s)", constants.EnvHttpServerAddr))
-	fs.String(constants.FlagHttpServerAuthUsername, getEnv(constants.EnvHttpServerAuthUsername, ""), fmt.Sprintf("Имя пользователя http-сервера (%s)", constants.EnvHttpServerAuthUsername))
-	fs.String(constants.FlagHttpServerAuthPassword, getEnv(constants.EnvHttpServerAuthPassword, ""), fmt.Sprintf("Пароль пользователя http-сервера (%s)", constants.EnvHttpServerAuthPassword))
-	fs.String(constants.FlagHttpServerAuthToken, getEnv(constants.EnvHttpServerAuthToken, ""), fmt.Sprintf("Baerer-токен http-сервера (%s)", constants.EnvHttpServerAuthToken))
+	// Register special command flags
+	for _, flagInfo := range config.SpecialCommandFlags {
+		fs.Bool(flagInfo.Name, false, flagInfo.Description)
+	}
 
 	fs.Parse(os.Args[1:])
-
 	return fs
 }
 
-// CheckRequiredFlags проверяет, заданы ли все обязательные флаги
+// CheckRequiredFlags checks if all required flags are set
 func (cf *ConsoleFlags) CheckRequiredFlags() error {
-
 	requiredFlags := []string{
-		constants.FlagRepoUrl,
-		constants.FlagRepoBranch,
-		constants.FlagLocalPath,
+		config.RepoURLFlagName,
+		config.RepoBranchFlagName,
+		config.LocalPathFlagName,
 	}
 
 	var missingFlags []string
@@ -87,11 +85,9 @@ func (cf *ConsoleFlags) CheckRequiredFlags() error {
 		return fmt.Errorf("required flags are missing: %v", strings.Join(missingFlags, ", "))
 	}
 	return nil
-
 }
 
 func (consoleFlags *ConsoleFlags) ValidateFlags() error {
-
 	if err := validateFlags(consoleFlags.Gitsync); err != nil {
 		return err
 	}
@@ -99,28 +95,27 @@ func (consoleFlags *ConsoleFlags) ValidateFlags() error {
 }
 
 func validateFlags(fs *flag.FlagSet) error {
-
 	// Repo URL
-	if err := validateFlagURL(fs, constants.FlagRepoUrl, "Repository URL"); err != nil {
+	if err := validateFlagURL(fs, config.RepoURLFlagName, "Repository URL"); err != nil {
 		return err
 	}
 
 	// Local path
-	if err := validateFlagLocalPath(fs, constants.FlagLocalPath, "Local Path"); err != nil {
+	if err := validateFlagLocalPath(fs, config.LocalPathFlagName, "Local Path"); err != nil {
 		return err
 	}
 
 	// Repo Branch
-	validateFlagOptional(fs, constants.FlagRepoBranch, "Repository Branch")
+	validateFlagOptional(fs, config.RepoBranchFlagName, "Repository Branch")
 
 	// Repo user
-	validateFlagOptional(fs, constants.FlagRepoAuthUser, "Repository User")
+	validateFlagOptional(fs, config.RepoUserFlagName, "Repository User")
 
 	// Repo token
-	validateFlagOptional(fs, constants.FlagRepoAuthToken, "Repository Token")
+	validateFlagOptional(fs, config.RepoTokenFlagName, "Repository Token")
 
 	// Sync interval
-	if err := validateFlagSyncInterval(fs, constants.FlagSyncInterval, "Sync Interval"); err != nil {
+	if err := validateFlagSyncInterval(fs, config.SyncIntervalFlagName, "Sync Interval"); err != nil {
 		return err
 	}
 
@@ -137,11 +132,10 @@ func getFlagValue(fs *flag.FlagSet, flagName string) (string, bool) {
 		value := f.Value.String()
 		return value, true
 	}
-
 	return "", false
 }
 
-// getEnv возвращает значение переменной окружения или значение по умолчанию, если переменная не установлена.
+// getEnv returns the value of an environment variable or a default value if the variable is not set.
 func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
 	if value == "" {
@@ -150,7 +144,7 @@ func getEnv(key, defaultValue string) string {
 	return value
 }
 
-// getEnvDuration возвращает значение переменной окружения в формате time.Duration или значение по умолчанию, если переменная не установлена или имеет некорректный формат.
+// getEnvDuration returns the value of an environment variable in time.Duration format or a default value if the variable is not set or has an incorrect format.
 func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	value := os.Getenv(key)
 	if value == "" {
@@ -163,16 +157,30 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	return duration
 }
 
-func validateFlagURL(fs *flag.FlagSet, fn string, desc string) error {
+// getEnvBool returns the value of an environment variable as a boolean or a default value if the variable is not set.
+func getEnvBool(key string, defaultValue bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
 
+	// Convert string to boolean
+	boolValue, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue
+	}
+	return boolValue
+}
+
+func validateFlagURL(fs *flag.FlagSet, fn string, desc string) error {
 	repoUrl, isExists := getFlagValue(fs, fn)
 
-	// Проверка наличия флага
+	// Check if flag exists
 	if !isExists {
 		return fmt.Errorf("%s is not set", desc)
 	}
 
-	// Проверка корректности указанного URL
+	// Check URL validity
 	_, err := url.ParseRequestURI(repoUrl)
 	if err != nil {
 		return err
@@ -181,7 +189,6 @@ func validateFlagURL(fs *flag.FlagSet, fn string, desc string) error {
 }
 
 func validateFlagLocalPath(fs *flag.FlagSet, fn string, desc string) error {
-
 	localPath, isExists := getFlagValue(fs, fn)
 
 	if !isExists {
@@ -203,7 +210,6 @@ func validateFlagOptional(fs *flag.FlagSet, fn string, desc string) {
 }
 
 func validateFlagSyncInterval(fs *flag.FlagSet, fn string, desc string) error {
-
 	fv, isExists := getFlagValue(fs, fn)
 	if !isExists {
 		return fmt.Errorf("%s is not set", desc)
@@ -220,38 +226,37 @@ func validateFlagSyncInterval(fs *flag.FlagSet, fn string, desc string) error {
 }
 
 func validateFlagsHttpServer(fs *flag.FlagSet) error {
-
 	// HTTP Server Addr
-	httpServerAddr, _ := getFlagValue(fs, constants.FlagHttpServerAddr)
+	httpServerAddr, _ := getFlagValue(fs, config.HTTPServerAddrFlagName)
 
 	if len(httpServerAddr) == 0 {
 		return nil
 	}
 
-	// Разделение адреса на IP и порт
+	// Split address into IP and port
 	parts := strings.Split(httpServerAddr, ":")
 	if len(parts) != 2 {
 		return fmt.Errorf("address must be in the format IP:PORT")
 	}
 
-	// Проверка корректности IP адреса
+	// Validate IP address
 	ip := net.ParseIP(parts[0])
 	if ip == nil {
 		return fmt.Errorf("invalid HTTP server IP-address")
 	}
 
-	// Проверка корректности порта
+	// Validate port
 	port, err := strconv.Atoi(parts[1])
 	if err != nil || port < 1 || port > 65535 {
 		return fmt.Errorf("invalid port. Valid port range is [1-65535]")
 	}
 
 	// HTTP Server Auth username
-	username, _ := getFlagValue(fs, constants.FlagHttpServerAuthUsername)
-	password, _ := getFlagValue(fs, constants.FlagHttpServerAuthPassword)
+	username, _ := getFlagValue(fs, config.HTTPAuthUsernameFlagName)
+	password, _ := getFlagValue(fs, config.HTTPAuthPasswordFlagName)
 
-	// HTTP Server Auth Baerer Token
-	token, _ := getFlagValue(fs, constants.FlagHttpServerAuthToken)
+	// HTTP Server Auth Bearer Token
+	token, _ := getFlagValue(fs, config.HTTPAuthTokenFlagName)
 
 	if len(username) == 0 && len(password) == 0 && len(token) == 0 {
 		logger.GetLogger().Warning("HTTP server: authentication is not enabled")

@@ -18,7 +18,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"git-sync/internal/constants"
 	"git-sync/internal/handlers"
 	"git-sync/logger"
 	"net/http"
@@ -100,10 +99,10 @@ func rootHandlerFunc(w http.ResponseWriter, r *http.Request) {
 
 func StartServer(f *flag.FlagSet, ctx context.Context) {
 
-	addr := f.Lookup(constants.FlagHttpServerAddr).Value.(flag.Getter).Get().(string)
-	basicUsername := f.Lookup(constants.FlagHttpServerAuthUsername).Value.(flag.Getter).Get().(string)
-	basicPassword := f.Lookup(constants.FlagHttpServerAuthPassword).Value.(flag.Getter).Get().(string)
-	bearerToken := f.Lookup(constants.FlagHttpServerAuthToken).Value.(flag.Getter).Get().(string)
+	addr := f.Lookup("http-server-addr").Value.(flag.Getter).Get().(string)
+	basicUsername := f.Lookup("http-auth-username").Value.(flag.Getter).Get().(string)
+	basicPassword := f.Lookup("http-auth-password").Value.(flag.Getter).Get().(string)
+	bearerToken := f.Lookup("http-auth-token").Value.(flag.Getter).Get().(string)
 
 	useBasicAuth := basicUsername != "" && basicPassword != ""
 	useBaererToken := len(bearerToken) > 0

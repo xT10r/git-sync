@@ -17,29 +17,78 @@ package mock
 import (
 	"flag"
 	"git-sync/git"
-	"git-sync/internal/constants"
+	"git-sync/internal/config"
 	"time"
 )
 
+// Flags creates a new flag set with default values for testing
 func Flags() *flag.FlagSet {
 	mockFlags := flag.NewFlagSet("test", flag.ContinueOnError)
-	mockFlags.Duration(constants.FlagSyncInterval, 30*time.Second, "Interval for synchronization")
-	mockFlags.String(constants.FlagRepoBranch, "master", "Branch of the repository")
-	mockFlags.String(constants.FlagRepoAuthUser, "user", "Repository authentication user")
-	mockFlags.String(constants.FlagRepoAuthToken, "token", "Repository authentication token")
+	mockFlags.Duration(config.SyncIntervalFlagName, 30*time.Second, "Interval for synchronization")
+	mockFlags.String(config.RepoBranchFlagName, "master", "Branch of the repository")
+	mockFlags.String(config.RepoUserFlagName, "user", "Repository authentication user")
+	mockFlags.String(config.RepoTokenFlagName, "token", "Repository authentication token")
 	return mockFlags
 }
 
+// FlagsWithValues creates a new flag set with specific values for testing
+func FlagsWithValues(repoURL, localPath, repoBranch string, syncInterval time.Duration) *flag.FlagSet {
+	mockFlags := flag.NewFlagSet("test", flag.ContinueOnError)
+	mockFlags.String(config.RepoURLFlagName, repoURL, "URL of the repository")
+	mockFlags.String(config.LocalPathFlagName, localPath, "Local path for the repository")
+	mockFlags.String(config.RepoBranchFlagName, repoBranch, "Branch of the repository")
+	mockFlags.Duration(config.SyncIntervalFlagName, syncInterval, "Interval for synchronization")
+	mockFlags.String(config.RepoUserFlagName, "user", "Repository authentication user")
+	mockFlags.String(config.RepoTokenFlagName, "token", "Repository authentication token")
+	return mockFlags
+}
+
+// Gitter is a mock implementation of the Gitter interface
 type Gitter struct {
 	hasChanges bool
+	syncError  error
+	options    *git.GitRepositoryOptions
+}
+
+// NewGitter creates a new mock Gitter with default values
+func NewGitter() *Gitter {
+	return &Gitter{
+		hasChanges: false,
+		syncError:  nil,
+		options:    git.NewGitRepositoryOptions("http://example.com", "master", "/path/to/local/repo", "user", "token", "origin"),
+	}
+}
+
+// NewGitterWithValues creates a new mock Gitter with specific values
+func NewGitterWithValues(hasChanges bool, syncError error, options *git.GitRepositoryOptions) *Gitter {
+	return &Gitter{
+		hasChanges: hasChanges,
+		syncError:  syncError,
+		options:    options,
+	}
+}
+
+// SetHasChanges sets the hasChanges flag for the mock
+func (m *Gitter) SetHasChanges(hasChanges bool) {
+	m.hasChanges = hasChanges
+}
+
+// SetSyncError sets the error to be returned by Sync method
+func (m *Gitter) SetSyncError(err error) {
+	m.syncError = err
+}
+
+// SetOptions sets the repository options for the mock
+func (m *Gitter) SetOptions(options *git.GitRepositoryOptions) {
+	m.options = options
 }
 
 func (m *Gitter) Sync() error {
-	return nil
+	return m.syncError
 }
 
 func (m *Gitter) Options() *git.GitRepositoryOptions {
-	return git.NewGitRepositoryOptions("http://example.com", "master", "/path/to/local/repo", "user", "token", "origin")
+	return m.options
 }
 
 func (m *Gitter) HasChanges() bool {
@@ -52,4 +101,32 @@ func (m *Gitter) Commit() (*git.CommitInfo, error) {
 
 func (m *Gitter) CommitHash() string {
 	return "mockhash"
+}
+
+// MockConfig creates a mock configuration for testing
+func MockConfig() *config.Config {
+	cfg := &config.Config{}
+
+	cfg.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
+	cfg.Gitlab.RepoBranch = "main"
+	cfg.Gitlab.RepoAuth.User = "testuser"
+	cfg.Gitlab.RepoAuth.Token = "testtoken"
+	cfg.Sync.LocalPath = "/tmp/testrepo"
+	cfg.Sync.Interval = 30
+
+	return cfg
+}
+
+// MockConfigWithValues creates a mock configuration with specific values for testing
+func MockConfigWithValues(repoURL, repoBranch, user, token, localPath string, interval int) *config.Config {
+	cfg := &config.Config{}
+
+	cfg.Gitlab.RepoURL = repoURL
+	cfg.Gitlab.RepoBranch = repoBranch
+	cfg.Gitlab.RepoAuth.User = user
+	cfg.Gitlab.RepoAuth.Token = token
+	cfg.Sync.LocalPath = localPath
+	cfg.Sync.Interval = interval
+
+	return cfg
 }
