@@ -1,4 +1,4 @@
-// Copyright 2024 Aleksey Dobshikov
+// Copyright 2025 Aleksey Dobshikov
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ func NewConsoleFlags() *ConsoleFlags {
 
 // ParseFlags initializes flags using a flag set.
 func ParseFlags() *flag.FlagSet {
-	fs := flag.NewFlagSet("git-sync", flag.ExitOnError)
+	fs := flag.NewFlagSet("git-sync", flag.ContinueOnError)
 
 	// Register all standard flags from the unified configuration
 	for _, flagInfo := range config.AllFlags {
@@ -61,7 +61,18 @@ func ParseFlags() *flag.FlagSet {
 		fs.Bool(flagInfo.Name, false, flagInfo.Description)
 	}
 
-	fs.Parse(os.Args[1:])
+	// Parse flags
+	err := fs.Parse(os.Args[1:])
+	if err != nil {
+		// If there's a parsing error, exit with a clear message
+		if err != flag.ErrHelp {
+			fmt.Fprintf(os.Stderr, "[ERROR] Invalid flag usage: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Use --help or --config-help for more information\n")
+			os.Exit(1)
+		}
+		// For help, we return the flag set and let main handle it
+	}
+
 	return fs
 }
 
@@ -82,7 +93,7 @@ func (cf *ConsoleFlags) CheckRequiredFlags() error {
 	}
 
 	if len(missingFlags) > 0 {
-		return fmt.Errorf("required flags are missing: %v", strings.Join(missingFlags, ", "))
+		return fmt.Errorf("required flags are missing: %v. Use --help or --config-help for more information", strings.Join(missingFlags, ", "))
 	}
 	return nil
 }
@@ -114,6 +125,9 @@ func validateFlags(fs *flag.FlagSet) error {
 	// Repo token
 	validateFlagOptional(fs, config.RepoTokenFlagName, "Repository Token")
 
+	// Repo token file
+	validateFlagOptional(fs, config.RepoTokenFileFlagName, "Repository Token File")
+
 	// Sync interval
 	if err := validateFlagSyncInterval(fs, config.SyncIntervalFlagName, "Sync Interval"); err != nil {
 		return err
@@ -123,6 +137,9 @@ func validateFlags(fs *flag.FlagSet) error {
 	if err := validateFlagsHttpServer(fs); err != nil {
 		return err
 	}
+
+	// HTTP Auth Token File
+	validateFlagOptional(fs, config.HTTPAuthTokenFileFlagName, "HTTP Auth Token File")
 
 	return nil
 }
@@ -203,9 +220,9 @@ func validateFlagLocalPath(fs *flag.FlagSet, fn string, desc string) error {
 
 func validateFlagOptional(fs *flag.FlagSet, fn string, desc string) {
 	if fv, isExists := getFlagValue(fs, fn); !isExists {
-		logger.GetLogger().Warning("%s is not set\n", desc)
+		logger.Warning("%s is not set\n", desc)
 	} else if fv == "" {
-		logger.GetLogger().Warning("%s is empty\n", desc)
+		logger.Warning("%s is empty\n", desc)
 	}
 }
 
@@ -258,8 +275,11 @@ func validateFlagsHttpServer(fs *flag.FlagSet) error {
 	// HTTP Server Auth Bearer Token
 	token, _ := getFlagValue(fs, config.HTTPAuthTokenFlagName)
 
-	if len(username) == 0 && len(password) == 0 && len(token) == 0 {
-		logger.GetLogger().Warning("HTTP server: authentication is not enabled")
+	// HTTP Server Auth Token File
+	tokenFile, _ := getFlagValue(fs, config.HTTPAuthTokenFileFlagName)
+
+	if len(username) == 0 && len(password) == 0 && len(token) == 0 && len(tokenFile) == 0 {
+		logger.Warning("HTTP server: authentication is not enabled")
 	}
 
 	return nil

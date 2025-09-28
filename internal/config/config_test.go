@@ -1,4 +1,4 @@
-// Copyright 2024 Aleksey Dobshikov
+// Copyright 2025 Aleksey Dobshikov
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -210,7 +210,7 @@ func TestGetConfigDescription(t *testing.T) {
 // TestFlagInfoStructure tests the FlagInfo structure
 func TestFlagInfoStructure(t *testing.T) {
 	// Test that AllFlags contains the expected number of flags
-	expectedFlagCount := 12 // Update this if you add/remove flags
+	expectedFlagCount := 17 // Updated to include repo-token-file, http-auth-token-file, and webhook flags
 	if len(AllFlags) != expectedFlagCount {
 		t.Errorf("Expected %d flags, got %d", expectedFlagCount, len(AllFlags))
 	}
@@ -392,17 +392,39 @@ func TestConfigStructure(t *testing.T) {
 	// Create a config instance
 	config := &Config{}
 
+	// Initialize the repositories map
+	config.Repositories = make(map[string]RepositoryConfig)
+
 	// Test that we can access all fields without panicking
-	_ = config.Gitlab.RepoURL
-	_ = config.Gitlab.RepoBranch
-	_ = config.Gitlab.RepoAuth.User
-	_ = config.Gitlab.RepoAuth.Token
-	_ = config.Gitlab.RepoAuth.TokenFile
-	_ = config.Sync.LocalPath
-	_ = config.Sync.Interval
+	// Since we now have multiple repositories, we'll test with a sample repository
+	repoConfig := RepositoryConfig{}
+	repoConfig.Gitlab.RepoURL = "test-url"
+	repoConfig.Gitlab.RepoBranch = "test-branch"
+	repoConfig.Gitlab.RepoAuth.User = "test-user"
+	repoConfig.Gitlab.RepoAuth.Token = "test-token"
+	repoConfig.Gitlab.RepoAuth.TokenFile = "test-token-file"
+	repoConfig.Sync.LocalPath = "test-path"
+	repoConfig.Sync.Interval = 30
+
+	config.Repositories["test-repo"] = repoConfig
+
+	_ = config.Debug
+	_ = config.Defaults.Gitlab.RepoAuth.User
+	_ = config.Defaults.Gitlab.RepoBranch
+	_ = config.Defaults.Sync.Interval
 	_ = config.HttpServer.Addr
 	_ = config.HttpServer.Auth.Username
 	_ = config.HttpServer.Auth.Password
 	_ = config.HttpServer.Auth.Token
 	_ = config.HttpServer.Auth.TokenFile
+
+	// Test accessing the repository config
+	testRepo := config.Repositories["test-repo"]
+	_ = testRepo.Gitlab.RepoURL
+	_ = testRepo.Gitlab.RepoBranch
+	_ = testRepo.Gitlab.RepoAuth.User
+	_ = testRepo.Gitlab.RepoAuth.Token
+	_ = testRepo.Gitlab.RepoAuth.TokenFile
+	_ = testRepo.Sync.LocalPath
+	_ = testRepo.Sync.Interval
 }

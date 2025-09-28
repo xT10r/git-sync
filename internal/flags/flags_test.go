@@ -1,4 +1,4 @@
-// Copyright 2024 Aleksey Dobshikov
+// Copyright 2025 Aleksey Dobshikov
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 	"flag"
 	"fmt"
 	"git-sync/logger"
-	"log"
 	"os"
 	"regexp"
 	"testing"
@@ -204,14 +203,16 @@ func TestValidateFlagOptional(t *testing.T) {
 			// Перехватываем вывод логгера
 			var buf bytes.Buffer
 			logger.GetLogger().SetOutput(&buf)
-			defer log.SetOutput(nil) // Восстанавливаем вывод логгера
+			defer func() {
+				logger.GetLogger().SetOutput(os.Stderr) // Восстанавливаем вывод логгера
+			}()
 
 			validateFlagOptional(fs, tt.flagName, tt.desc)
 
 			logOutput := buf.String()
 
 			// Создаем регулярное выражение для проверки префикса и ожидаемого сообщения без даты
-			re := regexp.MustCompile(fmt.Sprintf(`\[WARN\] \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} %s`, tt.expected))
+			re := regexp.MustCompile(fmt.Sprintf(`\[WARN\]  \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} %s`, regexp.QuoteMeta(tt.expected)))
 
 			if tt.expected != "" && !re.MatchString(logOutput) {
 				t.Errorf("Expected log message to contain '%s', but got '%s'", expectedPrefix+tt.expected, logOutput)
@@ -306,7 +307,7 @@ func TestCheckRequiredFlags(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for missing required flags, got nil")
 		} else {
-			expectedError := "required flags are missing: repo-branch, local-path"
+			expectedError := "required flags are missing: repo-branch, local-path. Use --help or --config-help for more information"
 			if err.Error() != expectedError {
 				t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
 			}
@@ -323,7 +324,7 @@ func TestCheckRequiredFlags(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for missing required flags, got nil")
 		} else {
-			expectedError := "required flags are missing: repo-url, repo-branch, local-path"
+			expectedError := "required flags are missing: repo-url, repo-branch, local-path. Use --help or --config-help for more information"
 			if err.Error() != expectedError {
 				t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
 			}

@@ -1,4 +1,4 @@
-// Copyright 2024 Aleksey Dobshikov
+// Copyright 2025 Aleksey Dobshikov
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,14 +39,20 @@ func TestStart(t *testing.T) {
 
 	// Create a mock configuration
 	cfg := &config.Config{}
-	cfg.Sync.Interval = 30 // seconds
+	cfg.Repositories = make(map[string]config.RepositoryConfig)
+
+	// Create a mock repository config
+	repoConfig := config.RepositoryConfig{}
+	repoConfig.Sync.Interval = 30 // seconds
+
+	cfg.Repositories["test-repo"] = repoConfig
 
 	// Создаем фейковый контекст с отменой через 100 миллисекунд
 	fakeCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
 
 	// Создаем экземпляр gitsync с использованием макета флагов и фейкового контекста
-	gitSync, err := gitsync.NewGitSync(mockFlags, cfg, fakeCtx)
+	gitSync, err := gitsync.NewGitSync(mockFlags, cfg, fakeCtx, "test-repo")
 	if err != nil {
 		t.Fatalf("Error initializing GitSync: %v", err)
 	}
@@ -59,7 +65,15 @@ func TestStart(t *testing.T) {
 
 	// Отправляем сообщение в канал вебхуков для проверки второй ветки select
 	go func() {
-		handlers.WebhookCh <- "127.0.0.1"
+		handlers.WebhookCh <- struct {
+			ClientIP  string
+			Timestamp time.Time
+			UserAgent string
+		}{
+			ClientIP:  "127.0.0.1",
+			Timestamp: time.Now(),
+			UserAgent: "test-agent",
+		}
 	}()
 
 	// Ждем некоторое время для проверки, что синхронизация запущена и остановлена

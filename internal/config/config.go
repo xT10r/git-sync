@@ -1,4 +1,4 @@
-// Copyright 2024 Aleksey Dobshikov
+// Copyright 2025 Aleksey Dobshikov
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,12 @@ package config
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"git-sync/logger"
 
 	"github.com/spf13/viper"
 )
@@ -40,55 +42,102 @@ const (
 	HTTPServerAuthPasswordKey = "http_server.auth.password"
 	ConfigFileKey             = "config.file"
 	DebugKey                  = "debug" // New debug configuration key
+	WebhookEnabledKey         = "webhook.enabled"
+	WebhookRateLimitKey       = "webhook.rate_limit"
+	WebhookTimeoutKey         = "webhook.timeout"
 )
 
 // Flag name constants
 const (
-	SyncIntervalFlagName     = "sync-interval"
-	RepoURLFlagName          = "repo-url"
-	RepoBranchFlagName       = "repo-branch"
-	RepoUserFlagName         = "repo-user"
-	RepoTokenFlagName        = "repo-token"
-	LocalPathFlagName        = "local-path"
-	HTTPServerAddrFlagName   = "http-server-addr"
-	HTTPAuthUsernameFlagName = "http-auth-username"
-	HTTPAuthPasswordFlagName = "http-auth-password"
-	HTTPAuthTokenFlagName    = "http-auth-token"
-	ConfigFileFlagName       = "config-file"
-	GenConfigFlagName        = "gen-config"
-	ConfigHelpFlagName       = "config-help"
-	DebugFlagName            = "debug" // New debug flag name
+	SyncIntervalFlagName      = "sync-interval"
+	RepoURLFlagName           = "repo-url"
+	RepoBranchFlagName        = "repo-branch"
+	RepoUserFlagName          = "repo-user"
+	RepoTokenFlagName         = "repo-token"
+	RepoTokenFileFlagName     = "repo-token-file"      // New flag for repo token file
+	HTTPAuthTokenFileFlagName = "http-auth-token-file" // New flag for HTTP auth token file
+	LocalPathFlagName         = "local-path"
+	HTTPServerAddrFlagName    = "http-server-addr"
+	HTTPAuthUsernameFlagName  = "http-auth-username"
+	HTTPAuthPasswordFlagName  = "http-auth-password"
+	HTTPAuthTokenFlagName     = "http-auth-token"
+	ConfigFileFlagName        = "config-file"
+	GenConfigFlagName         = "gen-config"
+	ConfigHelpFlagName        = "config-help"
+	DebugFlagName             = "debug" // New debug flag name
+	WebhookEnabledFlagName    = "webhook-enabled"
+	WebhookRateLimitFlagName  = "webhook-rate-limit"
+	WebhookTimeoutFlagName    = "webhook-timeout"
 )
 
 // Default value constants
 const (
-	DefaultHTTPServerAddr = "0.0.0.0:8080"
+	DefaultHTTPServerAddr   = "0.0.0.0:8080"
+	DefaultWebhookEnabled   = true
+	DefaultWebhookRateLimit = 10
+	DefaultWebhookTimeout   = 30
 )
 
 // Config represents the configuration structure
 type Config struct {
-	Gitlab struct {
-		RepoURL    string `mapstructure:"repoUrl"`
-		RepoBranch string `mapstructure:"repoBranch"`
-		RepoAuth   struct {
-			User      string `mapstructure:"user"`
-			Token     string `mapstructure:"token"`
-			TokenFile string `mapstructure:"token_file"`
-		} `mapstructure:"repoAuth"`
-	} `mapstructure:"gitlab"`
-	Sync struct {
-		LocalPath string `mapstructure:"local_path"`
-		Interval  int    `mapstructure:"interval"`
-	} `mapstructure:"sync"`
-	HttpServer struct {
-		Addr string `mapstructure:"addr"`
-		Auth struct {
-			Username  string `mapstructure:"username"`
-			Password  string `mapstructure:"password"`
-			Token     string `mapstructure:"token"`
-			TokenFile string `mapstructure:"token_file"`
-		} `mapstructure:"auth"`
-	} `mapstructure:"http_server"`
+	Debug        bool                        `mapstructure:"debug"`
+	Defaults     DefaultsConfig              `mapstructure:"defaults"`
+	HttpServer   HttpServerConfig            `mapstructure:"http_server"`
+	Repositories map[string]RepositoryConfig `mapstructure:"repositories"`
+	Webhook      WebhookConfig               `mapstructure:"webhook"`
+}
+
+// DefaultsConfig represents default configuration values
+type DefaultsConfig struct {
+	Gitlab GitlabConfig `mapstructure:"gitlab"`
+	Sync   SyncConfig   `mapstructure:"sync"`
+}
+
+// RepositoryConfig represents configuration for a single repository
+type RepositoryConfig struct {
+	Gitlab GitlabConfig `mapstructure:"gitlab"`
+	Sync   SyncConfig   `mapstructure:"sync"`
+}
+
+// GitlabConfig represents GitLab configuration
+type GitlabConfig struct {
+	RepoURL    string         `mapstructure:"repourl"`
+	RepoBranch string         `mapstructure:"repobranch"`
+	RepoAuth   RepoAuthConfig `mapstructure:"repoauth"`
+}
+
+// RepoAuthConfig represents repository authentication configuration
+type RepoAuthConfig struct {
+	User      string `mapstructure:"user"`
+	Token     string `mapstructure:"token"`
+	TokenFile string `mapstructure:"token_file"`
+}
+
+// SyncConfig represents synchronization configuration
+type SyncConfig struct {
+	LocalPath string `mapstructure:"local_path"`
+	Interval  int    `mapstructure:"interval"`
+}
+
+// HttpServerConfig represents HTTP server configuration
+type HttpServerConfig struct {
+	Addr string     `mapstructure:"addr"`
+	Auth AuthConfig `mapstructure:"auth"`
+}
+
+// AuthConfig represents authentication configuration for HTTP server
+type AuthConfig struct {
+	Username  string `mapstructure:"username"`
+	Password  string `mapstructure:"password"`
+	Token     string `mapstructure:"token"`
+	TokenFile string `mapstructure:"token_file"`
+}
+
+// WebhookConfig represents webhook configuration
+type WebhookConfig struct {
+	Enabled   bool `mapstructure:"enabled"`
+	RateLimit int  `mapstructure:"rate_limit"`
+	Timeout   int  `mapstructure:"timeout"`
 }
 
 // FlagInfo contains information about a command-line flag
@@ -132,6 +181,14 @@ var AllFlags = []FlagInfo{
 		ViperKey:     GitlabRepoAuthTokenKey,
 		EnvVar:       "GITSYNC_REPOSITORY_TOKEN",
 		Description:  "Token for repository authentication",
+		DefaultValue: "",
+		Type:         "string",
+	},
+	{
+		Name:         RepoTokenFileFlagName,
+		ViperKey:     GitlabRepoAuthKey,
+		EnvVar:       "GITSYNC_REPOSITORY_TOKEN_FILE",
+		Description:  "Path to file containing repository authentication token",
 		DefaultValue: "",
 		Type:         "string",
 	},
@@ -184,6 +241,14 @@ var AllFlags = []FlagInfo{
 		Type:         "string",
 	},
 	{
+		Name:         HTTPAuthTokenFileFlagName,
+		ViperKey:     HTTPServerAuthKey,
+		EnvVar:       "GITSYNC_HTTP_AUTH_TOKEN_FILE",
+		Description:  "Path to file containing HTTP server authentication token",
+		DefaultValue: "",
+		Type:         "string",
+	},
+	{
 		Name:         ConfigFileFlagName,
 		ViperKey:     ConfigFileKey,
 		EnvVar:       "GITSYNC_CONFIG_FILE",
@@ -198,6 +263,30 @@ var AllFlags = []FlagInfo{
 		Description:  "Enable debug logging",
 		DefaultValue: false,
 		Type:         "bool",
+	},
+	{
+		Name:         WebhookEnabledFlagName,
+		ViperKey:     WebhookEnabledKey,
+		EnvVar:       "GITSYNC_WEBHOOK_ENABLED",
+		Description:  "Enable/disable webhook endpoint",
+		DefaultValue: DefaultWebhookEnabled,
+		Type:         "bool",
+	},
+	{
+		Name:         WebhookRateLimitFlagName,
+		ViperKey:     WebhookRateLimitKey,
+		EnvVar:       "GITSYNC_WEBHOOK_RATE_LIMIT",
+		Description:  "Max requests per minute per IP",
+		DefaultValue: DefaultWebhookRateLimit,
+		Type:         "int",
+	},
+	{
+		Name:         WebhookTimeoutFlagName,
+		ViperKey:     WebhookTimeoutKey,
+		EnvVar:       "GITSYNC_WEBHOOK_TIMEOUT",
+		Description:  "Timeout for sync operation (secs)",
+		DefaultValue: DefaultWebhookTimeout,
+		Type:         "int",
 	},
 }
 
@@ -219,10 +308,15 @@ var SpecialCommandFlags = []FlagInfo{
 
 // ReadConfig reads configuration from file, environment variables and flags
 func ReadConfig(fs *flag.FlagSet, configPath string) (*Config, error) {
+	logger.Debug("Reading configuration")
+
 	// Set default values
 	viper.SetDefault(SyncIntervalKey, 30)
 	viper.SetDefault(HTTPServerAddrKey, DefaultHTTPServerAddr)
 	viper.SetDefault(DebugKey, false) // Set default for debug mode
+	viper.SetDefault(WebhookEnabledKey, DefaultWebhookEnabled)
+	viper.SetDefault(WebhookRateLimitKey, DefaultWebhookRateLimit)
+	viper.SetDefault(WebhookTimeoutKey, DefaultWebhookTimeout)
 
 	// Set config file name and type
 	viper.SetConfigName("config")
@@ -241,7 +335,12 @@ func ReadConfig(fs *flag.FlagSet, configPath string) (*Config, error) {
 
 	// Set config path
 	if configFilePath != "" {
-		viper.AddConfigPath(configFilePath)
+		// Extract directory from file path
+		dir := filepath.Dir(configFilePath)
+		viper.AddConfigPath(dir)
+		// Also set the config file name directly
+		viper.SetConfigFile(configFilePath)
+		logger.Debug("Using config file: %s", configFilePath)
 	}
 	// Add default config paths
 	viper.AddConfigPath(".")
@@ -259,18 +358,103 @@ func ReadConfig(fs *flag.FlagSet, configPath string) (*Config, error) {
 	// Try to read config file
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Println("Config file not found, using defaults and environment variables")
+			logger.Debug("Config file not found, using defaults and environment variables")
 		} else {
-			log.Printf("Error reading config file: %v\n", err)
+			logger.Debug("Error reading config file: %v", err)
 		}
 	} else {
-		log.Printf("Using config file: %s\n", viper.ConfigFileUsed())
+		logger.Debug("Using config file: %s", viper.ConfigFileUsed())
 	}
 
 	// Read values into config struct
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("unable to decode config into struct: %v", err)
+	}
+
+	logger.Debug("Configuration read successfully, found %d repositories", len(config.Repositories))
+
+	// Apply defaults to each repository
+	for repoName, repoConfig := range config.Repositories {
+		logger.Debug("Applying defaults for repository: %s", repoName)
+
+		// Apply GitLab defaults
+		if repoConfig.Gitlab.RepoBranch == "" && config.Defaults.Gitlab.RepoBranch != "" {
+			repoConfig.Gitlab.RepoBranch = config.Defaults.Gitlab.RepoBranch
+			logger.Debug("Applied default branch %s for repository %s", config.Defaults.Gitlab.RepoBranch, repoName)
+		}
+
+		// Apply GitLab authentication defaults
+		// If repository doesn't have user set, use default user
+		if repoConfig.Gitlab.RepoAuth.User == "" && config.Defaults.Gitlab.RepoAuth.User != "" {
+			repoConfig.Gitlab.RepoAuth.User = config.Defaults.Gitlab.RepoAuth.User
+			logger.Debug("Applied default user for repository %s", repoName)
+		}
+
+		// If repository doesn't have token set, use default token
+		if repoConfig.Gitlab.RepoAuth.Token == "" && config.Defaults.Gitlab.RepoAuth.Token != "" {
+			repoConfig.Gitlab.RepoAuth.Token = config.Defaults.Gitlab.RepoAuth.Token
+			logger.Debug("Applied default token for repository %s", repoName)
+		}
+
+		// If repository doesn't have token_file set, use default token_file
+		if repoConfig.Gitlab.RepoAuth.TokenFile == "" && config.Defaults.Gitlab.RepoAuth.TokenFile != "" {
+			repoConfig.Gitlab.RepoAuth.TokenFile = config.Defaults.Gitlab.RepoAuth.TokenFile
+			logger.Debug("Applied default token file for repository %s", repoName)
+		}
+
+		// Apply Sync defaults
+		if repoConfig.Sync.Interval == 0 && config.Defaults.Sync.Interval != 0 {
+			repoConfig.Sync.Interval = config.Defaults.Sync.Interval
+			logger.Debug("Applied default sync interval %d for repository %s", config.Defaults.Sync.Interval, repoName)
+		}
+
+		// Update the repository config
+		config.Repositories[repoName] = repoConfig
+	}
+
+	// Read token files if specified for each repository
+	for repoName, repoConfig := range config.Repositories {
+		if repoConfig.Gitlab.RepoAuth.TokenFile != "" {
+			logger.Debug("Reading token file for repository %s: %s", repoName, repoConfig.Gitlab.RepoAuth.TokenFile)
+			if token, err := readTokenFromFile(repoConfig.Gitlab.RepoAuth.TokenFile); err == nil {
+				// Update the token in the repository config
+				config.Repositories[repoName] = RepositoryConfig{
+					Gitlab: GitlabConfig{
+						RepoURL:    repoConfig.Gitlab.RepoURL,
+						RepoBranch: repoConfig.Gitlab.RepoBranch,
+						RepoAuth: RepoAuthConfig{
+							User:      repoConfig.Gitlab.RepoAuth.User,
+							Token:     token,
+							TokenFile: repoConfig.Gitlab.RepoAuth.TokenFile,
+						},
+					},
+					Sync: repoConfig.Sync,
+				}
+				logger.Debug("Successfully read token from file for repository %s", repoName)
+			} else {
+				logger.Debug("Error reading repository token file for %s: %v", repoName, err)
+			}
+		}
+	}
+
+	if config.HttpServer.Auth.TokenFile != "" {
+		logger.Debug("Reading HTTP auth token file: %s", config.HttpServer.Auth.TokenFile)
+		if token, err := readTokenFromFile(config.HttpServer.Auth.TokenFile); err == nil {
+			// Update the token in the HTTP server config
+			config.HttpServer = HttpServerConfig{
+				Addr: config.HttpServer.Addr,
+				Auth: AuthConfig{
+					Username:  config.HttpServer.Auth.Username,
+					Password:  config.HttpServer.Auth.Password,
+					Token:     token,
+					TokenFile: config.HttpServer.Auth.TokenFile,
+				},
+			}
+			logger.Debug("Successfully read HTTP auth token from file")
+		} else {
+			logger.Debug("Error reading HTTP auth token file: %v", err)
+		}
 	}
 
 	return &config, nil
@@ -287,10 +471,18 @@ func bindEnvs() {
 
 // setValuesFromFlags sets Viper values from command-line flags
 func setValuesFromFlags(fs *flag.FlagSet) {
+	// Create a map of explicitly set flags
+	explicitlySetFlags := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		explicitlySetFlags[f.Name] = true
+	})
+
+	// Now process all flags
 	fs.VisitAll(func(f *flag.Flag) {
 		for _, flagInfo := range AllFlags {
 			if f.Name == flagInfo.Name && flagInfo.ViperKey != "" {
-				if f.Value.String() != "" {
+				// Only set the value if the flag was explicitly provided, not just using default value
+				if explicitlySetFlags[f.Name] {
 					// Special handling for duration flags
 					if f.Name == SyncIntervalFlagName {
 						// Convert duration to seconds
@@ -307,39 +499,78 @@ func setValuesFromFlags(fs *flag.FlagSet) {
 	})
 }
 
+// readTokenFromFile reads a token from a file and trims whitespace
+func readTokenFromFile(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	// Trim whitespace and newlines
+	return strings.TrimSpace(string(content)), nil
+}
+
 // GenerateSampleConfig generates a sample configuration file
 func GenerateSampleConfig(filePath string) error {
-	// Set sample values using the unified flag information
-	for _, flagInfo := range AllFlags {
-		if flagInfo.ViperKey != "" {
-			switch flagInfo.ViperKey {
-			case GitlabRepoURLKey:
-				viper.Set(flagInfo.ViperKey, "https://gitlab.example.com/username/repository.git")
-			case GitlabRepoBranchKey:
-				viper.Set(flagInfo.ViperKey, "main")
-			case GitlabRepoAuthUserKey:
-				viper.Set(flagInfo.ViperKey, "gitlab-user")
-			case GitlabRepoAuthTokenKey:
-				viper.Set(flagInfo.ViperKey, "your-gitlab-token")
-			case SyncLocalPathKey:
-				viper.Set(flagInfo.ViperKey, "./repo")
-			case SyncIntervalKey:
-				viper.Set(flagInfo.ViperKey, 30)
-			case HTTPServerAddrKey:
-				viper.Set(flagInfo.ViperKey, DefaultHTTPServerAddr)
-			case HTTPServerAuthUsernameKey:
-				viper.Set(flagInfo.ViperKey, "admin")
-			case HTTPServerAuthPasswordKey:
-				viper.Set(flagInfo.ViperKey, "password")
-			case DebugKey:
-				viper.Set(flagInfo.ViperKey, false)
-			}
-		}
-	}
+	logger.Debug("Generating sample configuration file at: %s", filePath)
+
+	// Set sample values for defaults
+	viper.Set("debug", false)
+
+	// Set defaults
+	viper.Set("defaults.gitlab.repoauth.user", "gitlab-user")
+	viper.Set("defaults.gitlab.repoauth.token", "your-default-gitlab-token")
+	viper.Set("defaults.gitlab.repoauth.token_file", "") // Default token file path (optional)
+	viper.Set("defaults.gitlab.repobranch", "main")
+	viper.Set("defaults.sync.interval", 30)
+
+	// Set HTTP server config
+	viper.Set("http_server.addr", DefaultHTTPServerAddr)
+	viper.Set("http_server.auth.username", "admin")
+	viper.Set("http_server.auth.password", "password")
+
+	// Set webhook config
+	viper.Set("webhook.enabled", DefaultWebhookEnabled)
+	viper.Set("webhook.rate_limit", DefaultWebhookRateLimit)
+	viper.Set("webhook.timeout", DefaultWebhookTimeout)
+
+	// Set repositories
+	// Repository that uses default credentials
+	viper.Set("repositories.main-repo.gitlab.repourl", "https://gitlab.example.com/username/repository1.git")
+	// Note: No repoauth specified - will use defaults
+	viper.Set("repositories.main-repo.sync.local_path", "./repo1")
+
+	// Repository with its own credentials
+	viper.Set("repositories.secondary-repo.gitlab.repoauth.token", "your-gitlab-token-2")
+	viper.Set("repositories.secondary-repo.gitlab.repoauth.user", "secondary-user")
+	viper.Set("repositories.secondary-repo.gitlab.repobranch", "develop")
+	viper.Set("repositories.secondary-repo.gitlab.repourl", "https://gitlab.example.com/username/repository2.git")
+	viper.Set("repositories.secondary-repo.sync.interval", 60)
+	viper.Set("repositories.secondary-repo.sync.local_path", "./repo2")
+
+	// Repository that inherits token from defaults but uses its own user
+	viper.Set("repositories.external-repo.gitlab.repoauth.user", "different-user")
+	viper.Set("repositories.external-repo.gitlab.repourl", "https://gitlab.example.com/anotheruser/repository.git")
+	// Note: No token specified - will use default token
+	viper.Set("repositories.external-repo.sync.local_path", "./external-repo")
+
+	// Repository with all its own credentials
+	viper.Set("repositories.custom-repo.gitlab.repoauth.token", "your-gitlab-token-4")
+	viper.Set("repositories.custom-repo.gitlab.repoauth.user", "custom-user")
+	viper.Set("repositories.custom-repo.gitlab.repobranch", "feature-branch")
+	viper.Set("repositories.custom-repo.gitlab.repourl", "https://gitlab.example.com/custom/repo.git")
+	viper.Set("repositories.custom-repo.sync.interval", 300)
+	viper.Set("repositories.custom-repo.sync.local_path", "./custom-repo")
 
 	// Write config to file
 	viper.SetConfigFile(filePath)
-	return viper.WriteConfig()
+	err := viper.WriteConfig()
+	if err != nil {
+		logger.Debug("Error writing sample configuration file: %v", err)
+		return err
+	}
+
+	logger.Debug("Sample configuration file generated successfully")
+	return nil
 }
 
 // PrintUnifiedHelp prints unified help information
@@ -354,6 +585,8 @@ func PrintUnifiedHelp() {
 			fmt.Fprintf(os.Stderr, "  -%s duration\n", flagInfo.Name)
 		} else if flagInfo.Type == "bool" {
 			fmt.Fprintf(os.Stderr, "  -%s\n", flagInfo.Name)
+		} else if flagInfo.Type == "int" {
+			fmt.Fprintf(os.Stderr, "  -%s int\n", flagInfo.Name)
 		} else {
 			fmt.Fprintf(os.Stderr, "  -%s string\n", flagInfo.Name)
 		}
@@ -402,6 +635,7 @@ func PrintConfigHelp() {
 	var gitlabOptions []string
 	var syncOptions []string
 	var httpOptions []string
+	var webhookOptions []string
 
 	// Add options from AllFlags
 	for _, flagInfo := range AllFlags {
@@ -412,6 +646,8 @@ func PrintConfigHelp() {
 				syncOptions = append(syncOptions, flagInfo.ViperKey)
 			} else if strings.HasPrefix(flagInfo.ViperKey, "http_server.") {
 				httpOptions = append(httpOptions, flagInfo.ViperKey)
+			} else if strings.HasPrefix(flagInfo.ViperKey, "webhook.") {
+				webhookOptions = append(webhookOptions, flagInfo.ViperKey)
 			}
 		}
 	}
@@ -443,6 +679,14 @@ func PrintConfigHelp() {
 			showEnvAndFlag(opt)
 		}
 	}
+
+	fmt.Fprintf(os.Stderr, "\nWebhook Settings:\n")
+	for _, opt := range webhookOptions {
+		if desc, exists := descriptions[opt]; exists {
+			fmt.Fprintf(os.Stderr, "  %s: %s\n", opt, desc)
+			showEnvAndFlag(opt)
+		}
+	}
 }
 
 // PrintConfigHelpInFormat prints help information for all configuration options in a format suitable for command-line help
@@ -453,6 +697,7 @@ func PrintConfigHelpInFormat() {
 	var gitlabOptions []string
 	var syncOptions []string
 	var httpOptions []string
+	var webhookOptions []string
 
 	// Add options from AllFlags
 	for _, flagInfo := range AllFlags {
@@ -463,6 +708,8 @@ func PrintConfigHelpInFormat() {
 				syncOptions = append(syncOptions, flagInfo.ViperKey)
 			} else if strings.HasPrefix(flagInfo.ViperKey, "http_server.") {
 				httpOptions = append(httpOptions, flagInfo.ViperKey)
+			} else if strings.HasPrefix(flagInfo.ViperKey, "webhook.") {
+				webhookOptions = append(webhookOptions, flagInfo.ViperKey)
 			}
 		}
 	}
@@ -549,6 +796,44 @@ func PrintConfigHelpInFormat() {
 			if flagName != "" {
 				fmt.Fprintf(os.Stderr, "  -%s string\n", flagName)
 				fmt.Fprintf(os.Stderr, "        %s (env: %s)\n", desc, getEnvVarForConfigKey(opt))
+			}
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "\nWebhook Settings:\n")
+	for _, opt := range webhookOptions {
+		if desc, exists := descriptions[opt]; exists {
+			// Find the corresponding flag name
+			flagName := ""
+			for _, flagInfoItem := range AllFlags {
+				if flagInfoItem.ViperKey == opt {
+					flagName = flagInfoItem.Name
+					break
+				}
+			}
+
+			if flagName != "" {
+				// Find the flag info to get its type
+				var flagInfo *FlagInfo
+				for _, fi := range AllFlags {
+					if fi.ViperKey == opt {
+						flagInfo = &fi
+						break
+					}
+				}
+
+				if flagInfo != nil {
+					if flagInfo.Type == "int" {
+						fmt.Fprintf(os.Stderr, "  -%s int\n", flagName)
+						fmt.Fprintf(os.Stderr, "        %s (env: %s)\n", desc, getEnvVarForConfigKey(opt))
+					} else if flagInfo.Type == "bool" {
+						fmt.Fprintf(os.Stderr, "  -%s\n", flagName)
+						fmt.Fprintf(os.Stderr, "        %s (env: %s)\n", desc, getEnvVarForConfigKey(opt))
+					} else {
+						fmt.Fprintf(os.Stderr, "  -%s string\n", flagName)
+						fmt.Fprintf(os.Stderr, "        %s (env: %s)\n", desc, getEnvVarForConfigKey(opt))
+					}
+				}
 			}
 		}
 	}
