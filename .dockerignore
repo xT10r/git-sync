@@ -1,9 +1,72 @@
-.idea
-.config
-.vscode
-.git
+# ==============================================================================
+# IDE/Editor Configuration Files and Directories
+# ==============================================================================
+.idea/
+.vscode/
+.config/
+.sonarlint/
+
+# ==============================================================================
+# Version Control System (Git) and CI/CD Files
+# ==============================================================================
+.git/
 .gitignore
+.github/
+
+# ==============================================================================
+# Environment Variables and Security-Sensitive Files
+# (NEVER include these in Docker images!)
+# ==============================================================================
 .env
-*.iml
+.env.*
+.aws/
+.ssh/
+
+# ==============================================================================
+# Go-Specific Build Artifacts and Development Files
+# ==============================================================================
+# Executable binaries and build directories
+bin/
+build/
+*.exe
+*.test
+
+# Test files and directories
+**/*_test.go
+tests/
+
+# Go cache and temporary files
+vendor/          # exclude if using vendoring (but usually needed)
+go.sum           # keep - required for dependency verification
+.cache/
+.cover/
+profile.out
+
+# ==============================================================================
+# Documentation and Examples
+# (Not needed in production container)
+# ==============================================================================
+/docs/
+/examples/
 /README.md
 /LICENSE
+CHANGELOG.md
+CONTRIBUTING.md
+
+# ==============================================================================
+# Project-Specific Development Directories
+# (Not required at runtime)
+# ==============================================================================
+/scripts/         # development/build scripts
+/mock/            # testing mocks
+/daemon/          # if this is a separate component, not the main binary
+/git/             # presumably git operations utility folder
+
+# ==============================================================================
+# General System and Temporary Files
+# ==============================================================================
+.DS_Store
+Thumbs.db
+*.log
+logs/
+.dump/
