@@ -1,9 +1,25 @@
+# Copyright 2025 Aleksey Dobshikov
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 name: Release
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    tags: ['v*']
+
+permissions:
+  contents: write
 
 jobs:
   test:
@@ -13,133 +29,116 @@ jobs:
     name: Create Release
     needs: test
     runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4.1.7
+      - name: Checkout
+        uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
 
       - name: Set up Go
-        uses: actions/setup-go@v5.0.1
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.23.x'
+          check-latest: true
 
-      # Build for Linux x64
-      - name: Build for Linux x64
+      - name: Compute version vars
+        id: vars
+        shell: bash
         run: |
-          mkdir -p build/linux/x64
-          GOOS=linux GOARCH=amd64 go build -o build/linux/x64/git-sync ./cmd/
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "COMMIT=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+          echo "DIRTY=false" >> $GITHUB_OUTPUT
 
-      # Build for Windows x64
-      - name: Build for Windows x64
+      - name: Build artifacts (linux/darwin amd64+arm64, windows amd64)
+        shell: bash
         run: |
-          mkdir -p build/windows/x64
-          GOOS=windows GOARCH=amd64 go build -o build/windows/x64/git-sync.exe ./cmd/
+          set -euo pipefail
+          ver='${{ steps.vars.outputs.VERSION }}'
+          commit='${{ steps.vars.outputs.COMMIT }}'
+          date='${{ steps.vars.outputs.DATE }}'
+          dirty='${{ steps.vars.outputs.DIRTY }}'
 
-      # Build for OSX x64
-      - name: Build for OSX x64
+          build() {
+            os="$1"; arch="$2"; ext="$3"
+            outdir="build/${os}/${arch}"
+            mkdir -p "$outdir"
+            GOOS="$os" GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w \
+                -X 'git-sync/internal/version.Version=${ver}' \
+                -X 'git-sync/internal/version.Commit=${commit}' \
+                -X 'git-sync/internal/version.Date=${date}' \
+                -X 'git-sync/internal/version.Dirty=${dirty}'" \
+              -o "${outdir}/git-sync${ext}" ./cmd
+
+            # упаковка
+            case "$os" in
+              windows)
+                zip -j "build/git-sync_${ver}_${os}_${arch}.zip" "${outdir}/git-sync${ext}"
+                ;;
+              linux|darwin)
+                tar -czf "build/git-sync_${ver}_${os}_${arch}.tar.gz" -C "$outdir" "git-sync${ext}"
+                ;;
+            esac
+          }
+
+          build linux  amd64 ""
+          build linux  arm64 ""
+          build darwin amd64 ""
+          build darwin arm64 ""
+          build windows amd64 ".exe"
+          # build windows arm64 ".exe" # без излишеств
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign release artifacts (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
         run: |
-          mkdir -p build/osx/x64
-          GOOS=darwin GOARCH=amd64 go build -o build/osx/x64/git-sync ./cmd/
+          shopt -s nullglob
+          for f in build/git-sync_*; do
+            cosign sign-blob --yes "$f" \
+              --output-signature "$f.sig" \
+              --output-certificate "$f.pem"
+          done
 
-      # Create tar.gz archive for Linux x64
-      - name: Create tar.gz for Linux x64
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
         run: |
-          tar -czvf build/git-sync-linux-amd64.tar.gz -C build/linux/x64 git-sync
-
-      # Create zip archive for Windows x64
-      - name: Create zip for Windows x64
-        run: |
-          zip -j build/git-sync-windows-x64.zip build/windows/x64/git-sync.exe
-
-      # Create tar.gz archive for OSX x64
-      - name: Create tar.gz for OSX x64
-        run: |
-          tar -czvf build/git-sync-osx-x64.tar.gz -C build/osx/x64 git-sync
-
-
-      # Extract release notes from CHANGELOG.md
-      - name: Extract release notes
-        id: extract_release_notes
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          awk '/## \['"$VERSION"'\]/,/^## \[/' CHANGELOG.md | sed '$d' > release_notes.md
+          VERSION='${{ steps.vars.outputs.VERSION }}'
+          awk '/## \['"$VERSION"'\]/,/^## \[/' CHANGELOG.md | sed '$d' > release_notes.md || true
           if [ ! -s release_notes.md ]; then
-            awk '/## \['"$VERSION"'\]/,/^$/' CHANGELOG.md > release_notes.md
+            awk '/## \['"$VERSION"'\]/,/^$/' CHANGELOG.md > release_notes.md || true
+          fi
+          if [ ! -s release_notes.md ]; then
+            echo "Release ${VERSION}" > release_notes.md
           fi
 
-      # Create a new release
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1.1.4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
-          body_path: ./release_notes.md
+          name: ${{ github.ref_name }}
+          body_path: release_notes.md
           draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Upload artifacts to release
-      - name: Upload Linux x64 to release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/git-sync-linux-amd64.tar.gz
-          asset_name: git-sync-linux-amd64.tar.gz
-          asset_content_type: application/gzip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Windows x64 to release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/git-sync-windows-x64.zip
-          asset_name: git-sync-windows-x64.zip
-          asset_content_type: application/zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload OSX x64 to release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/git-sync-osx-x64.tar.gz
-          asset_name: git-sync-osx-x64.tar.gz
-          asset_content_type: application/gzip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Docker release
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Login docker registry
-      - name: Log in to Docker Hub
-        if: success() && startsWith(github.ref, 'refs/tags/')
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      # Build and push Docker image
-      - name: Build and push Docker image
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            xt10r/git-sync:latest
-            xt10r/git-sync:${{ github.ref_name }}
-
-      # Clean Docker images
-      - name: Clean up
-        run: |
-          docker image prune -f
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_linux_amd64.tar.gz
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_linux_arm64.tar.gz
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_darwin_amd64.tar.gz
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_darwin_arm64.tar.gz
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_windows_amd64.zip
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_linux_amd64.tar.gz.sig
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_linux_amd64.tar.gz.pem
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_linux_arm64.tar.gz.sig
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_linux_arm64.tar.gz.pem
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_darwin_amd64.tar.gz.sig
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_darwin_amd64.tar.gz.pem
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_darwin_arm64.tar.gz.sig
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_darwin_arm64.tar.gz.pem
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_windows_amd64.zip.sig
+            build/git-sync_${{ steps.vars.outputs.VERSION }}_windows_amd64.zip.pem

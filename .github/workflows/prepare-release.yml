@@ -1,0 +1,236 @@
+# Copyright 2025 Aleksey Dobshikov
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Prepare Release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Explicit SemVer (e.g., v1.2.3). If set, overrides auto-bump.'
+        type: string
+        default: ''
+      bump:
+        description: 'Bump strategy if version empty: auto|major|minor|patch'
+        type: choice
+        required: true
+        default: auto
+        options: [auto, major, minor, patch]
+      skip_pr:
+        description: 'Skip creating PR (useful for local act runs)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Compute last tag
+        id: last
+        shell: bash
+        run: |
+          echo "TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v0.0.0)" >> $GITHUB_OUTPUT
+
+      # 1) Одноразовый оверрайд через файл .release-bump (major|minor|patch)
+      - name: Detect bump from .release-bump (optional)
+        id: filebump
+        shell: bash
+        run: |
+          if [[ -f .release-bump ]]; then
+            v=$(tr -d '[:space:]' < .release-bump | tr '[:upper:]' '[:lower:]')
+            case "$v" in major|minor|patch) echo "BUMP=$v" >> $GITHUB_OUTPUT ;; *) echo "BUMP=" >> $GITHUB_OUTPUT ;; esac
+          else
+            echo "BUMP=" >> $GITHUB_OUTPUT
+          fi
+
+      # 2) CHANGELOG.md → секция [Unreleased]
+      - name: Detect bump from CHANGELOG Unreleased
+        id: chbump
+        shell: bash
+        run: |
+          set -euo pipefail
+          bump=""; section=""
+          if [[ -f CHANGELOG.md ]]; then
+            # Вырезаем секцию [Unreleased]
+            section="$(awk '/^## \[Unreleased\]/{flag=1;next}/^## \[/{flag=0}flag' CHANGELOG.md)"
+            shopt -s nocasematch
+            if echo "$section" | grep -Eq '^###[[:space:]]*(Breaking|Removed)'; then
+              bump="major"
+            elif echo "$section" | grep -Eq '^###[[:space:]]*(Added|Feature|Enhancements?)'; then
+              bump="minor"
+            elif echo "$section" | grep -Eq '^###[[:space:]]*(Fixed|Security|Performance|Perf)'; then
+              bump="patch"
+            fi
+          fi
+          echo "BUMP=$bump" >> $GITHUB_OUTPUT
+
+      # 3) Conventional Commits (на случай, если changelog не ведут)
+      - name: Auto-detect bump from commits (Conventional Commits)
+        id: autobump
+        shell: bash
+        run: |
+          set -euo pipefail
+          last='${{ steps.last.outputs.TAG }}'
+          range="${last}..HEAD"
+          log="$(git log --no-merges --format='%s%n%b' "$range" || true)"
+          bump="none"
+          shopt -s nocasematch
+          if echo "$log" | grep -E -q '(^.+!:.+)|(^BREAKING[ -]CHANGE:)'; then
+            bump="major"
+          elif echo "$log" | grep -E -q '(^feat(\(.+\))?:)'; then
+            bump="minor"
+          elif echo "$log" | grep -E -q '(^fix(\(.+\))?:)|(^perf(\(.+\))?:)'; then
+            bump="patch"
+          else
+            bump="none"
+          fi
+          echo "BUMP=$bump" >> $GITHUB_OUTPUT
+
+      # 4) Итоговое вычисление версии с приоритетами
+      - name: Compute next version
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # a) Явный ввод версии
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VER="${{ github.event.inputs.version }}"
+          else
+            LAST='${{ steps.last.outputs.TAG }}'
+            base="${LAST#v}"
+            IFS='.' read -r MAJ MIN PAT <<<"$base"
+
+            # b) BUMP из inputs.bump != auto
+            if [[ "${{ github.event.inputs.bump }}" != "auto" ]]; then
+              DECISION='${{ github.event.inputs.bump }}'
+            # c) BUMP из файла .release-bump
+            elif [[ -n "${{ steps.filebump.outputs.BUMP }}" ]]; then
+              DECISION='${{ steps.filebump.outputs.BUMP }}'
+            # d) BUMP из CHANGELOG
+            elif [[ -n "${{ steps.chbump.outputs.BUMP }}" ]]; then
+              DECISION='${{ steps.chbump.outputs.BUMP }}'
+            # e) BUMP из коммитов (Conventional)
+            else
+              DECISION='${{ steps.autobump.outputs.BUMP }}'
+            fi
+
+            case "$DECISION" in
+              major) MAJ=$((MAJ+1)); MIN=0; PAT=0 ;;
+              minor) MIN=$((MIN+1)); PAT=0 ;;
+              patch) PAT=$((PAT+1)) ;;
+              none|"") # фолбэк: можно выбрать "exit 0" чтобы пропустить релиз
+                PAT=$((PAT+1))
+                ;;
+              *) echo "Unknown bump: $DECISION" >&2; exit 1 ;;
+            esac
+
+            VER="v${MAJ}.${MIN}.${PAT}"
+          fi
+
+          DATE=$(date -u +'%Y-%m-%d')
+          PREV=$(git describe --tags --abbrev=0 --match 'v*' --exclude "$VER" 2>/dev/null || echo "")
+          echo "VER=$VER"   >> $GITHUB_OUTPUT
+          echo "DATE=$DATE" >> $GITHUB_OUTPUT
+          echo "PREV=$PREV" >> $GITHUB_OUTPUT
+          echo "REPO=${GITHUB_REPOSITORY}" >> $GITHUB_OUTPUT
+          echo "::notice title=Next version::${VER}"
+          {
+            echo "### Next release"
+            echo ""
+            echo "- Version: \`${VER}\`"
+            echo "- Date: \`${DATE}\`"
+            echo "- Previous tag: \`${PREV}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show [Unreleased] section (before)
+        shell: bash
+        run: |
+          echo "::group::[Unreleased] before"
+          awk '/^## \[Unreleased\]/{flag=1;print;next}/^## \[/{flag=0}flag' CHANGELOG.md || true
+          echo "::endgroup::"
+
+      - name: Update CHANGELOG.md (Unreleased -> version)
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="CHANGELOG.md"
+          test -f "$file" || { echo "CHANGELOG.md not found"; exit 1; }
+
+          ver='${{ steps.ver.outputs.VER }}'
+          date='${{ steps.ver.outputs.DATE }}'
+
+          awk -v ver="$ver" -v d="$date" '
+            BEGIN { done=0 }
+            {
+              if (!done && $0 ~ /^## \[Unreleased\]/) {
+                print "## [Unreleased]\n";
+                print "## [" ver "] - " d;
+                done=1; next
+              }
+              print
+            }
+          ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+
+      - name: Show CHANGELOG diff
+        shell: bash
+        run: |
+          echo "::group::git diff CHANGELOG.md"
+          git --no-pager diff --unified=0 -- CHANGELOG.md || true
+          echo "::endgroup::"
+          head -n 40 CHANGELOG.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update comparison links
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="CHANGELOG.md"
+          ver='${{ steps.ver.outputs.VER }}'
+          prev='${{ steps.ver.outputs.PREV }}'
+          repo='${{ steps.ver.outputs.REPO }}'
+
+          unreleased="\\[Unreleased\\]: https://github.com/${repo}/compare/${ver}...HEAD"
+          if grep -qE "^\[Unreleased\]:" "$file"; then
+            sed -E -i "s#^\[Unreleased\]:.*#${unreleased}#g" "$file"
+          else
+            echo -e "\n${unreleased}" >> "$file"
+          fi
+
+          if [[ -n "$prev" ]]; then
+            verlink="\\[${ver}\\]: https://github.com/${repo}/compare/${prev}...${ver}"
+            sed -E -i "/^\[${ver//./\\.}\]:/d" "$file"
+            echo "${verlink}" >> "$file"
+          fi
+
+      - name: Create Release PR
+        uses: peter-evans/create-pull-request@v6
+        if: ${{ github.event.inputs.skip_pr != 'true' }}
+        with:
+          branch: release/${{ steps.ver.outputs.VER }}
+          title: "chore(release): prepare ${{ steps.ver.outputs.VER }}"
+          body: |
+            Prepare release **${{ steps.ver.outputs.VER }}**.
+            - Move Unreleased → ${{ steps.ver.outputs.VER }} - ${{ steps.ver.outputs.DATE }}
+            - Update compare links
+            - Bump decision order: input.version > input.bump > .release-bump > CHANGELOG > commits
+            - Applied bump: ${{ github.event.inputs.version && 'explicit version' || (github.event.inputs.bump != 'auto' && github.event.inputs.bump || (steps.filebump.outputs.BUMP || steps.chbump.outputs.BUMP || steps.autobump.outputs.BUMP)) }}
+          commit-message: "chore(release): CHANGELOG for ${{ steps.ver.outputs.VER }}"
+          labels: release
