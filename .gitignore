@@ -1,18 +1,15 @@
 # IDE and Editor files
 *.iml
-.idea
 *.bak
-.vscode/**/*
-.vscode/launch.json
+.idea
+.cursor
+.qoder
+.vscode
 
 # Configuration and local files
-.config/**/*
+.config
 config.yaml
 config.json
-
-# Documentation and example files
-logic.md
-Dockerfile.example
 
 # Test and coverage files
 fmtcoverage.html
@@ -21,3 +18,29 @@ fmtcoverage.html
 .sonarlint
 .sonarlint/**/*
 
+# Other documentation files
+*.txt
+*.pdf
+*.doc
+*.docx
+*.ppt
+*.pptx
+*.xls
+*.xlsx
+
+# Additional documentation
+TODO
+
+!docs/**/*.md
+!README.md
+!CHANGELOG.md
+
+# Binary files
+*.exe
+
+# Example files
+examples
+.examples
+
+# Log files
+*.log
