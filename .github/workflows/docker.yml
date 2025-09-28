@@ -1,0 +1,239 @@
+# Copyright 2025 Aleksey Dobshikov
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: build-and-push
+
+on:
+  push:
+    tags: ['v*']           # release
+    branches: ['main']     # edge/latest
+  workflow_dispatch:
+    inputs:
+      use_latest_tag:
+        description: 'Build images for latest release tag'
+        type: boolean
+        default: false
+  schedule:
+    - cron: '17 3 * * *'   # every day at 03:17 UTC
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write          # for keyless cosign
+
+jobs:
+  precheck:
+    uses: ./.github/workflows/common.yml
+
+  docker:
+    name: Build & Push Container
+    needs: precheck
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [alpine, debian, ubuntu]
+        include:
+          - family: alpine
+            image: alpine:3.21
+            suffix: alpine
+          - family: debian
+            image: debian:trixie-slim
+            suffix: debian
+          - family: ubuntu
+            image: ubuntu:24.04
+            suffix: ubuntu
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # GHCR login (всегда, кроме PR)
+      - name: Login GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Docker Hub login (только на тегах)
+      - name: Login Docker Hub
+        if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # Version: tag → vX.Y.Z, schedule/dispatch → last release, otherwise dev
+      - name: Compute version vars
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          elif [[ "${{ github.event.inputs.use_latest_tag }}" == "true" || "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            VERSION="$(git describe --tags --abbrev=0 --match 'v*' || echo dev)"
+          else
+            VERSION="dev"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "COMMIT=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+          echo "DIRTY=false" >> $GITHUB_OUTPUT
+
+          # Канонический тег для подписи/скана
+          if [[ "$VERSION" == dev ]]; then
+            echo "CANONICAL_TAG=dev-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            echo "CANONICAL_TAG=latest-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          else
+            echo "CANONICAL_TAG=${VERSION}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          fi
+
+      # Метаданные для PUSH-событий
+      # ВАЖНО: Docker Hub добавляем в images только на тегах.
+      - name: Docker metadata (tags for push)
+        id: meta
+        if: github.event_name == 'push'
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+            ${{ startsWith(github.ref, 'refs/tags/') && 'docker.io/xt10r/git-sync' || '' }}
+          tags: |
+            type=semver,pattern={{version}},suffix=-${{ matrix.suffix }},enable={{ startsWith(github.ref, 'refs/tags/v') }}
+            type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.suffix }},enable={{ startsWith(github.ref, 'refs/tags/v') }}
+            type=semver,pattern={{major}},suffix=-${{ matrix.suffix }},enable={{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,suffix=-${{ matrix.suffix }},enable={{ github.ref == 'refs/heads/main' }}
+          labels: |
+            org.opencontainers.image.title=git-sync
+
+      # Теги для schedule/dispatch → GHCR only
+      - name: Compute tags (for schedule/dispatch)
+        id: tags
+        if: github.event_name != 'push'
+        shell: bash
+        run: |
+          ver='${{ steps.ver.outputs.VERSION }}'
+          suf='${{ matrix.suffix }}'
+          if [[ "$ver" == "dev" ]]; then
+            echo "TAGS=ghcr.io/${{ github.repository }}:dev-${suf},docker.io/xt10r/git-sync:dev-${suf}" >> $GITHUB_OUTPUT
+          else
+            major="${ver#v}"; major="${major%%.*}"
+            minor="${ver#v${major}.}"; minor="${minor%%.*}"
+            echo "TAGS=ghcr.io/${{ github.repository }}:${ver}-${suf},ghcr.io/${{ github.repository }}:v${major}.${minor}-${suf},ghcr.io/${{ github.repository }}:v${major}-${suf},ghcr.io/${{ github.repository }}:latest-${suf},docker.io/xt10r/git-sync:${ver}-${suf},docker.io/xt10r/git-sync:v${major}.${minor}-${suf},docker.io/xt10r/git-sync:v${major}-${suf},docker.io/xt10r/git-sync:latest-${suf}" >> $GITHUB_OUTPUT
+          fi
+          echo "GHCR_TAG=ghcr.io/${{ github.repository }}:${{ steps.ver.outputs.CANONICAL_TAG }}" >> $GITHUB_OUTPUT
+
+      - name: Build & Push (amd64 + arm64)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ github.event_name == 'push' && steps.meta.outputs.tags || steps.tags.outputs.TAGS }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.ver.outputs.VERSION }}
+            COMMIT=${{ steps.ver.outputs.COMMIT }}
+            DATE=${{ steps.ver.outputs.DATE }}
+            DIRTY=${{ steps.ver.outputs.DIRTY }}
+            RUNTIME_IMAGE=${{ matrix.image }}
+            RUNTIME_FAMILY=${{ matrix.family }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0.17.5
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.4
+
+      # Иммутабельные refs (GHCR digest у нас уже есть; Docker Hub — только на тегах)
+      - name: Compute immutable refs (by digest)
+        id: img
+        shell: bash
+        run: |
+          GHCR_DIGEST='${{ steps.build.outputs.digest }}'
+          echo "GHCR_DIGEST=$GHCR_DIGEST" >> $GITHUB_OUTPUT
+          echo "GHCR_REF=ghcr.io/${{ github.repository }}@${GHCR_DIGEST}" >> $GITHUB_OUTPUT
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == refs/tags/* ]]; then
+            DOCKER_TAG="docker.io/xt10r/git-sync:${{ steps.ver.outputs.CANONICAL_TAG }}"
+            DOCKER_DIGEST=$(crane digest "$DOCKER_TAG")
+            echo "DOCKER_DIGEST=$DOCKER_DIGEST" >> $GITHUB_OUTPUT
+            echo "DOCKER_REF=docker.io/xt10r/git-sync@${DOCKER_DIGEST}" >> $GITHUB_OUTPUT
+          fi
+
+      # Подписываем GHCR
+      - name: Cosign sign image (GHCR)
+        if: github.event_name != 'pull_request'
+        env: { COSIGN_EXPERIMENTAL: "1" }
+        run: |
+          cosign sign --yes "${{ steps.img.outputs.GHCR_REF }}"
+
+      # Подписываем Docker Hub — только на тегах
+      - name: Cosign sign image (Docker Hub)
+        if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/')
+        env: { COSIGN_EXPERIMENTAL: "1" }
+        run: |
+          cosign sign --yes "${{ steps.img.outputs.DOCKER_REF }}"
+
+      # SBOM на GHCR
+      - name: Generate SBOM (CycloneDX JSON)
+        run: |
+          syft packages "${{ steps.img.outputs.GHCR_REF }}" -o cyclonedx-json > sbom.cdx.json
+
+      - name: Attach SBOM to image (GHCR)
+        run: |
+          cosign attach sbom --sbom sbom.cdx.json --type cyclonedx "${{ steps.img.outputs.GHCR_REF }}"
+
+      - name: Sign SBOM artifact (GHCR)
+        env: { COSIGN_EXPERIMENTAL: "1" }
+        run: |
+          SBOM_REF=$(cosign triangulate --type sbom "${{ steps.img.outputs.GHCR_REF }}")
+          cosign sign --yes "$SBOM_REF"
+
+      # SLSA (к GHCR digest)
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.img.outputs.GHCR_DIGEST }}
+          push-to-registry: true
+
+      # Trivy по GHCR digest
+      - name: Trivy scan (image)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ghcr.io/${{ github.repository }}@${{ steps.img.outputs.GHCR_DIGEST }}
+          format: table
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
