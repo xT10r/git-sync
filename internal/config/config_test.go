@@ -22,6 +22,7 @@ import (
 	"time"
 )
 
+// TestDebugFlag tests that the debug flag is properly defined
 func TestDebugFlag(t *testing.T) {
 	// Test that the debug flag is properly defined
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -29,9 +30,9 @@ func TestDebugFlag(t *testing.T) {
 	// Register all flags
 	for _, flagInfo := range AllFlags {
 		switch flagInfo.Type {
-		case "duration":
+		case FlagTypeDuration:
 			fs.Duration(flagInfo.Name, 0, flagInfo.Description)
-		case "bool":
+		case FlagTypeBool:
 			fs.Bool(flagInfo.Name, false, flagInfo.Description)
 		default:
 			fs.String(flagInfo.Name, "", flagInfo.Description)
@@ -42,6 +43,7 @@ func TestDebugFlag(t *testing.T) {
 	debugFlag := fs.Lookup(DebugFlagName)
 	if debugFlag == nil {
 		t.Errorf("Debug flag '%s' not found", DebugFlagName)
+		return // Early return to avoid nil pointer dereference
 	}
 
 	// Check if debug flag has correct default value
@@ -63,9 +65,9 @@ func TestAllFlags(t *testing.T) {
 	// Register all flags
 	for _, flagInfo := range AllFlags {
 		switch flagInfo.Type {
-		case "duration":
+		case FlagTypeDuration:
 			fs.Duration(flagInfo.Name, 0, flagInfo.Description)
-		case "bool":
+		case FlagTypeBool:
 			fs.Bool(flagInfo.Name, false, flagInfo.Description)
 		default:
 			fs.String(flagInfo.Name, "", flagInfo.Description)
@@ -88,9 +90,9 @@ func TestSpecialCommandFlags(t *testing.T) {
 	// Register special command flags
 	for _, flagInfo := range SpecialCommandFlags {
 		switch flagInfo.Type {
-		case "duration":
+		case FlagTypeDuration:
 			fs.Duration(flagInfo.Name, 0, flagInfo.Description)
-		case "bool":
+		case FlagTypeBool:
 			fs.Bool(flagInfo.Name, false, flagInfo.Description)
 		default:
 			fs.String(flagInfo.Name, "", flagInfo.Description)

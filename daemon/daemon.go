@@ -15,9 +15,12 @@
 package daemon
 
 import (
+	"fmt"
+	"os"
+
 	"git-sync/logger"
 
-	"github.com/sevlyar/go-daemon"
+	daemon "github.com/sevlyar/go-daemon"
 )
 
 // TODO: реализовать при необходимости
@@ -26,7 +29,6 @@ var pidFile = "/var/run/git-sync.pid"
 
 // Запускает приложение как демон
 func Start() {
-
 	cntxt := &daemon.Context{
 		PidFileName: pidFile,
 		PidFilePerm: 0644,
@@ -34,14 +36,16 @@ func Start() {
 
 	d, err := cntxt.Reborn()
 	if err != nil {
-		logger.Error("%v\n", err)
+		if logErr := logger.Error("%v\n", err); logErr != nil {
+			// If we can't log the error, at least print it to stderr
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		}
 	}
 	if d != nil {
 		return
 	}
 
 	// Запуск основной логики приложения
-
 }
 
 // Останавливает демон

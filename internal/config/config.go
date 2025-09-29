@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,7 +41,7 @@ const (
 	HTTPServerAuthUsernameKey = "http_server.auth.username"
 	HTTPServerAuthPasswordKey = "http_server.auth.password"
 	ConfigFileKey             = "config.file"
-	DebugKey                  = "debug" // New debug configuration key
+	DebugKey                  = "debug"
 	WebhookEnabledKey         = "webhook.enabled"
 	WebhookRateLimitKey       = "webhook.rate_limit"
 	WebhookTimeoutKey         = "webhook.timeout"
@@ -54,8 +54,8 @@ const (
 	RepoBranchFlagName        = "repo-branch"
 	RepoUserFlagName          = "repo-user"
 	RepoTokenFlagName         = "repo-token"
-	RepoTokenFileFlagName     = "repo-token-file"      // New flag for repo token file
-	HTTPAuthTokenFileFlagName = "http-auth-token-file" // New flag for HTTP auth token file
+	RepoTokenFileFlagName     = "repo-token-file"
+	HTTPAuthTokenFileFlagName = "http-auth-token-file"
 	LocalPathFlagName         = "local-path"
 	HTTPServerAddrFlagName    = "http-server-addr"
 	HTTPAuthUsernameFlagName  = "http-auth-username"
@@ -64,7 +64,7 @@ const (
 	ConfigFileFlagName        = "config-file"
 	GenConfigFlagName         = "gen-config"
 	ConfigHelpFlagName        = "config-help"
-	DebugFlagName             = "debug" // New debug flag name
+	DebugFlagName             = "debug"
 	WebhookEnabledFlagName    = "webhook-enabled"
 	WebhookRateLimitFlagName  = "webhook-rate-limit"
 	WebhookTimeoutFlagName    = "webhook-timeout"
@@ -76,6 +76,14 @@ const (
 	DefaultWebhookEnabled   = true
 	DefaultWebhookRateLimit = 10
 	DefaultWebhookTimeout   = 30
+)
+
+// Constants for flag types to avoid goconst warnings
+const (
+	FlagTypeDuration = "duration"
+	FlagTypeBool     = "bool"
+	FlagTypeInt      = "int"
+	FlagTypeString   = "string"
 )
 
 // Config represents the configuration structure
@@ -464,7 +472,9 @@ func ReadConfig(fs *flag.FlagSet, configPath string) (*Config, error) {
 func bindEnvs() {
 	for _, flagInfo := range AllFlags {
 		if flagInfo.ViperKey != "" {
-			viper.BindEnv(flagInfo.ViperKey, flagInfo.EnvVar)
+			if err := viper.BindEnv(flagInfo.ViperKey, flagInfo.EnvVar); err != nil {
+				logger.Debug("Error binding environment variable %s to key %s: %v", flagInfo.EnvVar, flagInfo.ViperKey, err)
+			}
 		}
 	}
 }
@@ -581,13 +591,14 @@ func PrintUnifiedHelp() {
 
 	// Print standard flags
 	for _, flagInfo := range AllFlags {
-		if flagInfo.Type == "duration" {
+		switch flagInfo.Type {
+		case FlagTypeDuration:
 			fmt.Fprintf(os.Stderr, "  -%s duration\n", flagInfo.Name)
-		} else if flagInfo.Type == "bool" {
+		case FlagTypeBool:
 			fmt.Fprintf(os.Stderr, "  -%s\n", flagInfo.Name)
-		} else if flagInfo.Type == "int" {
+		case FlagTypeInt:
 			fmt.Fprintf(os.Stderr, "  -%s int\n", flagInfo.Name)
-		} else {
+		default:
 			fmt.Fprintf(os.Stderr, "  -%s string\n", flagInfo.Name)
 		}
 		fmt.Fprintf(os.Stderr, "        %s (%s)\n", flagInfo.Description, flagInfo.EnvVar)
@@ -640,13 +651,14 @@ func PrintConfigHelp() {
 	// Add options from AllFlags
 	for _, flagInfo := range AllFlags {
 		if flagInfo.ViperKey != "" {
-			if strings.HasPrefix(flagInfo.ViperKey, "gitlab.") {
+			switch {
+			case strings.HasPrefix(flagInfo.ViperKey, "gitlab."):
 				gitlabOptions = append(gitlabOptions, flagInfo.ViperKey)
-			} else if strings.HasPrefix(flagInfo.ViperKey, "sync.") {
+			case strings.HasPrefix(flagInfo.ViperKey, "sync."):
 				syncOptions = append(syncOptions, flagInfo.ViperKey)
-			} else if strings.HasPrefix(flagInfo.ViperKey, "http_server.") {
+			case strings.HasPrefix(flagInfo.ViperKey, "http_server."):
 				httpOptions = append(httpOptions, flagInfo.ViperKey)
-			} else if strings.HasPrefix(flagInfo.ViperKey, "webhook.") {
+			case strings.HasPrefix(flagInfo.ViperKey, "webhook."):
 				webhookOptions = append(webhookOptions, flagInfo.ViperKey)
 			}
 		}
@@ -702,13 +714,14 @@ func PrintConfigHelpInFormat() {
 	// Add options from AllFlags
 	for _, flagInfo := range AllFlags {
 		if flagInfo.ViperKey != "" {
-			if strings.HasPrefix(flagInfo.ViperKey, "gitlab.") {
+			switch {
+			case strings.HasPrefix(flagInfo.ViperKey, "gitlab."):
 				gitlabOptions = append(gitlabOptions, flagInfo.ViperKey)
-			} else if strings.HasPrefix(flagInfo.ViperKey, "sync.") {
+			case strings.HasPrefix(flagInfo.ViperKey, "sync."):
 				syncOptions = append(syncOptions, flagInfo.ViperKey)
-			} else if strings.HasPrefix(flagInfo.ViperKey, "http_server.") {
+			case strings.HasPrefix(flagInfo.ViperKey, "http_server."):
 				httpOptions = append(httpOptions, flagInfo.ViperKey)
-			} else if strings.HasPrefix(flagInfo.ViperKey, "webhook.") {
+			case strings.HasPrefix(flagInfo.ViperKey, "webhook."):
 				webhookOptions = append(webhookOptions, flagInfo.ViperKey)
 			}
 		}
@@ -734,9 +747,9 @@ func PrintConfigHelpInFormat() {
 			if flagName == "" {
 				switch opt {
 				case GitlabRepoAuthKey:
-					flagName = "repo-token-file"
+					flagName = RepoTokenFileFlagName
 				case HTTPServerAuthKey:
-					flagName = "http-auth-token-file"
+					flagName = HTTPAuthTokenFileFlagName
 				}
 			}
 
@@ -787,9 +800,9 @@ func PrintConfigHelpInFormat() {
 			if flagName == "" {
 				switch opt {
 				case GitlabRepoAuthKey:
-					flagName = "repo-token-file"
+					flagName = RepoTokenFileFlagName
 				case HTTPServerAuthKey:
-					flagName = "http-auth-token-file"
+					flagName = HTTPAuthTokenFileFlagName
 				}
 			}
 
@@ -823,13 +836,14 @@ func PrintConfigHelpInFormat() {
 				}
 
 				if flagInfo != nil {
-					if flagInfo.Type == "int" {
+					switch flagInfo.Type {
+					case "int":
 						fmt.Fprintf(os.Stderr, "  -%s int\n", flagName)
 						fmt.Fprintf(os.Stderr, "        %s (env: %s)\n", desc, getEnvVarForConfigKey(opt))
-					} else if flagInfo.Type == "bool" {
+					case "bool":
 						fmt.Fprintf(os.Stderr, "  -%s\n", flagName)
 						fmt.Fprintf(os.Stderr, "        %s (env: %s)\n", desc, getEnvVarForConfigKey(opt))
-					} else {
+					default:
 						fmt.Fprintf(os.Stderr, "  -%s string\n", flagName)
 						fmt.Fprintf(os.Stderr, "        %s (env: %s)\n", desc, getEnvVarForConfigKey(opt))
 					}
@@ -853,10 +867,10 @@ func showEnvAndFlag(configKey string) {
 	switch configKey {
 	case GitlabRepoAuthKey:
 		fmt.Fprintf(os.Stderr, "    Environment variable: %s\n", "GITSYNC_REPOSITORY_TOKEN_FILE")
-		fmt.Fprintf(os.Stderr, "    Command-line flag: --%s\n", "repo-token-file")
+		fmt.Fprintf(os.Stderr, "    Command-line flag: --%s\n", RepoTokenFileFlagName)
 	case HTTPServerAuthKey:
 		fmt.Fprintf(os.Stderr, "    Environment variable: %s\n", "GITSYNC_HTTP_AUTH_TOKEN_FILE")
-		fmt.Fprintf(os.Stderr, "    Command-line flag: --%s\n", "http-auth-token-file")
+		fmt.Fprintf(os.Stderr, "    Command-line flag: --%s\n", HTTPAuthTokenFileFlagName)
 	}
 }
 
@@ -890,9 +904,9 @@ func getFlagNameForConfigKey(configKey string) string {
 	// Handle special cases for tokenFile which are not in flags but shown in help
 	switch configKey {
 	case GitlabRepoAuthKey:
-		return "repo-token-file"
+		return RepoTokenFileFlagName
 	case HTTPServerAuthKey:
-		return "http-auth-token-file"
+		return HTTPAuthTokenFileFlagName
 	}
 
 	return ""

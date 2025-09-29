@@ -16,9 +16,10 @@ package metrics
 
 import (
 	"fmt"
-	"git-sync/git"
-	"git-sync/internal/version"
 	"time"
+
+	git "git-sync/git"
+	"git-sync/internal/version"
 
 	"github.com/prometheus/client_golang/prometheus"
 )

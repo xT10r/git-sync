@@ -18,6 +18,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"time"
 
 	"git-sync/internal/config"
@@ -64,7 +65,6 @@ func NewGitSync(f *flag.FlagSet, cfg *config.Config, ctx context.Context, reposi
 }
 
 func (gitsync *GitSync) Start(gitRepo interfaces.Gitter) {
-
 	logger.Info("Sync: start synchronization\n")
 	logger.Debug("Starting synchronization loop for repository: %s", gitsync.repositoryName)
 
@@ -74,7 +74,6 @@ func (gitsync *GitSync) Start(gitRepo interfaces.Gitter) {
 
 	for {
 		select {
-
 		case <-gitsync.ctx.Done():
 			// Контекст отменен, выходим
 			logger.Info("Sync: stop synchronization\n")
@@ -90,7 +89,8 @@ func (gitsync *GitSync) Start(gitRepo interfaces.Gitter) {
 			duration := time.Since(startTime).Seconds()
 			metrics.ObserveSyncDuration("webhook", getResultFromError(err), duration)
 			if err != nil {
-				logger.Error("Webhook sync error for repository %s: %v", gitsync.repositoryName, err)
+				// Log the error and continue
+				_, _ = fmt.Fprintf(os.Stderr, "Webhook sync error for repository %s: %v", gitsync.repositoryName, err)
 				metrics.IncrementSyncError("webhook", gitsync.repositoryName)
 			}
 			logger.Info("Sync: webhook synchronization (client IP: %s)\n", webhookData.ClientIP)
@@ -103,7 +103,7 @@ func (gitsync *GitSync) Start(gitRepo interfaces.Gitter) {
 			duration := time.Since(startTime).Seconds()
 			metrics.ObserveSyncDuration("periodic", getResultFromError(err), duration)
 			if err != nil {
-				logger.Error("Periodic sync error for repository %s: %v", gitsync.repositoryName, err)
+				_, _ = fmt.Fprintf(os.Stderr, "Periodic sync error for repository %s: %v", gitsync.repositoryName, err)
 				metrics.IncrementSyncError("periodic", gitsync.repositoryName)
 			}
 		}
@@ -111,13 +111,12 @@ func (gitsync *GitSync) Start(gitRepo interfaces.Gitter) {
 }
 
 func (gitsync *GitSync) Sync(gitRepo interfaces.Gitter) error {
-
 	logger.Debug("Starting sync operation for repository: %s", gitsync.repositoryName)
 
 	// Синхронизация локального репозитория
 	err := gitRepo.Sync()
 	if err != nil {
-		logger.Error("Sync error: %v", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Sync error: %v", err)
 		metrics.SyncTotalErrorCount.Inc()
 		return err
 	}
@@ -125,7 +124,7 @@ func (gitsync *GitSync) Sync(gitRepo interfaces.Gitter) error {
 	// Получаем текущий коммит
 	commit, err := gitRepo.Commit()
 	if err != nil {
-		logger.Error("%v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 	} else {
 		logger.Debug("Updating commit info for repository: %s, commit: %s", gitsync.repositoryName, commit.Hash)
 		metrics.UpdateCommitInfo(commit, gitsync.repositoryName)

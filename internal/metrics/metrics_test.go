@@ -147,7 +147,7 @@ func TestHttpMetrics(t *testing.T) {
 	// Test HttpRequestsInProgress
 	// First set a value for specific labels to ensure the metric exists
 	HttpRequestsInProgress.WithLabelValues("GET", "/metrics").Set(0)
-	initialCount = testutil.CollectAndCount(HttpRequestsInProgress)
+	// Don't store initialCount as we're just modifying an existing metric
 	IncrementHttpRequestInProgress("GET", "/metrics")
 	// Don't check count here as we're just modifying an existing metric
 	DecrementHttpRequestInProgress("GET", "/metrics")

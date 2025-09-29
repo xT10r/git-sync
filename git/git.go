@@ -1,4 +1,4 @@
-// Copyright 2024 Aleksey Dobshikov
+// Copyright 2025 Aleksey Dobshikov
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-git/go-git/v5"
+	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -73,7 +73,6 @@ type GitRepositoryOptions struct {
 
 // NewCommitInfo создает новый объект CommitInfo на основе git.Commit.
 func NewCommitInfo(commit *object.Commit) *CommitInfo {
-
 	return &CommitInfo{
 		Hash:    commit.Hash.String(),
 		Date:    commit.Committer.When,
@@ -115,20 +114,35 @@ func (ci *CommitInfo) AddChange(changeType, fileName, fromHash, toHash string) {
 	ci.Changes = append(ci.Changes, change)
 }
 
-// NewGitRepository создает экземпляр GitRepository с значениями по умолчанию.
+// NewGitRepository creates an instance of GitRepository with default values.
 func NewGitRepository(fs *flag.FlagSet, cfg *config.Config) (*GitRepository, error) {
-
 	// If flagSet is not specified, return an error
 	if fs == nil {
 		return nil, fmt.Errorf("FlagSet is nil")
 	}
 
+	// Since we now support multiple repositories, we need to get the first repository
+	// for backward compatibility or create a way to specify which repository to use
+	var firstRepoConfig config.RepositoryConfig
+	var found bool
+
+	// Get the first repository from the config
+	for _, repoConfig := range cfg.Repositories {
+		firstRepoConfig = repoConfig
+		found = true
+		break
+	}
+
+	if !found {
+		return nil, fmt.Errorf("no repositories configured")
+	}
+
 	// Use the unified configuration
-	url := cfg.Gitlab.RepoURL
-	branch := cfg.Gitlab.RepoBranch
-	path := cfg.Sync.LocalPath
-	user := cfg.Gitlab.RepoAuth.User
-	token := cfg.Gitlab.RepoAuth.Token
+	url := firstRepoConfig.Gitlab.RepoURL
+	branch := firstRepoConfig.Gitlab.RepoBranch
+	path := firstRepoConfig.Sync.LocalPath
+	user := firstRepoConfig.Gitlab.RepoAuth.User
+	token := firstRepoConfig.Gitlab.RepoAuth.Token
 
 	// Validate that required fields are not empty
 	if url == "" {
@@ -172,9 +186,20 @@ func NewGitRepository(fs *flag.FlagSet, cfg *config.Config) (*GitRepository, err
 	return gitRepository, nil
 }
 
+// getAuth creates an authentication object based on the token
+func (gitRepo *GitRepository) getAuth() http.AuthMethod {
+	if gitRepo.options.token != "" {
+		// For GitLab Personal Access Tokens, use "oauth2" as the username and token as password
+		return &http.BasicAuth{
+			Username: "oauth2",
+			Password: gitRepo.options.token,
+		}
+	}
+	return nil
+}
+
 // Sync выполняет синхронизацию локального и удаленного репозитория
 func (gitRepo *GitRepository) Sync() error {
-
 	var err error
 
 	gitRepo.resetChangesFlag()
@@ -218,9 +243,20 @@ func (gitRepo *GitRepository) HasChanges() bool {
 	return gitRepo.hasChanges
 }
 
+// setChangesFlag устанавливает значение флага "найдены изменения"
+func (gitRepo *GitRepository) setChangesFlag(value bool) {
+	gitRepo.mutex.Lock()
+	defer gitRepo.mutex.Unlock()
+	gitRepo.hasChanges = value
+}
+
+// resetChangesFlag сбрасывает флаг "найдены изменения" в false
+func (gitRepo *GitRepository) resetChangesFlag() {
+	gitRepo.setChangesFlag(false)
+}
+
 // Commit получает текущий коммит
 func (gitRepo *GitRepository) Commit() (*CommitInfo, error) {
-
 	gitRepo.mutex.Lock()
 	defer gitRepo.mutex.Unlock()
 
@@ -238,7 +274,6 @@ func (gitRepo *GitRepository) CommitHash() string {
 
 // cloneRepo выполняет клонирование репозиторий
 func (gitRepo *GitRepository) cloneRepo() error {
-
 	repoDir := gitRepo.options.path
 	if gitRepo.options == nil {
 		return fmt.Errorf("ошибка получения пути локального репозитория")
@@ -259,14 +294,15 @@ func (gitRepo *GitRepository) cloneRepo() error {
 	}
 
 	if !needToClone {
+		logger.Debug("Repository already exists at %s, skipping clone", repoDir)
 		return nil
 	}
 
+	logger.Debug("Cloning repository from %s to %s", gitRepo.options.url, repoDir)
+
 	repository, err := git.PlainClone(gitRepo.options.path, false, &git.CloneOptions{
-		URL: gitRepo.options.url, // URL удаленного репозитория
-		Auth: &http.TokenAuth{
-			Token: gitRepo.options.token, // Токен для аутентификации
-		},
+		URL:  gitRepo.options.url, // URL удаленного репозитория
+		Auth: gitRepo.getAuth(),   // Токен для аутентификации
 	})
 	if err != nil {
 		return fmt.Errorf("failed to clone repository: %v", err)
@@ -275,7 +311,9 @@ func (gitRepo *GitRepository) cloneRepo() error {
 	gitRepo.repository = repository
 
 	gitRepo.setChangesFlag(true)
-	gitRepo.storeCurrentCommit("local")
+	if err := gitRepo.storeCurrentCommit("local"); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "Error storing current commit: %v\n", err)
+	}
 	err = gitRepo.showCommitMessage()
 	if err != nil {
 		return err
@@ -297,6 +335,7 @@ func (gitRepo *GitRepository) openRepo() error {
 
 // cloneOpenRepo клонирует или открывает репозиторий
 func (gitRepo *GitRepository) cloneOpenRepo() error {
+	logger.Debug("Cloning or opening repository at %s", gitRepo.options.path)
 
 	if err := gitRepo.cloneRepo(); err != nil {
 		return err
@@ -306,6 +345,7 @@ func (gitRepo *GitRepository) cloneOpenRepo() error {
 		return err
 	}
 
+	logger.Debug("Successfully cloned or opened repository at %s", gitRepo.options.path)
 	return nil
 }
 
@@ -314,21 +354,21 @@ func (gitRepo *GitRepository) cloneOpenRepo() error {
 // возникновения проблем при выполнении операции fetch. Если репозиторий
 // уже актуален и не требует обновления, возвращает nil без ошибки.
 func (gitRepo *GitRepository) fetchRepo() error {
+	logger.Debug("Fetching updates for repository at %s", gitRepo.options.path)
 
 	remote, err := gitRepo.repository.Remote(gitRepo.options.originName)
 	if err != nil {
 		return fmt.Errorf("failed to get remote: %v", err)
 	}
 
-	// Выполняем fetch для получения обновлений из удаленного репозитория
+	// Выполняем fetch для полученияолучения обновлений из удаленного репозитория
 	err = remote.Fetch(&git.FetchOptions{
-		Auth: &http.TokenAuth{
-			Token: gitRepo.options.token,
-		},
+		Auth:  gitRepo.getAuth(),
 		Force: true,
 	})
 
 	if err == git.NoErrAlreadyUpToDate {
+		logger.Debug("Repository is already up to date")
 		return nil // Репозиторий уже актуален, не возвращаем ошибку
 	}
 
@@ -336,6 +376,7 @@ func (gitRepo *GitRepository) fetchRepo() error {
 		return fmt.Errorf("failed to fetch remote: %v", err)
 	}
 
+	logger.Debug("Successfully fetched updates for repository at %s", gitRepo.options.path)
 	return nil
 }
 
@@ -343,6 +384,7 @@ func (gitRepo *GitRepository) fetchRepo() error {
 // Если force установлен в true, операция Pull будет выполнена с флагом Force для принудительного объединения изменений.
 // В случае ошибки при выполнении операции Pull, функция возвращает ошибку.
 func (gitRepo *GitRepository) pullRepo(force bool) error {
+	logger.Debug("Pulling changes for repository at %s (force: %v)", gitRepo.options.path, force)
 
 	// Получаем объект Worktree из текущего репозитория
 	wt, err := gitRepo.getRepoWorktree()
@@ -354,12 +396,19 @@ func (gitRepo *GitRepository) pullRepo(force bool) error {
 	err = wt.Pull(&git.PullOptions{
 		RemoteURL:  gitRepo.options.url,
 		RemoteName: gitRepo.options.originName,
+		Auth:       gitRepo.getAuth(),
 		Force:      force,
 	})
 
 	// Обрабатываем случаи ошибок
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		return fmt.Errorf("failed to pull changes: %v", err)
+	}
+
+	if err == git.NoErrAlreadyUpToDate {
+		logger.Debug("No changes to pull for repository at %s", gitRepo.options.path)
+	} else {
+		logger.Debug("Successfully pulled changes for repository at %s", gitRepo.options.path)
 	}
 
 	return nil
@@ -370,6 +419,7 @@ func (gitRepo *GitRepository) pullRepo(force bool) error {
 // неотслеживаемые файлы и отменяя все изменения.
 // Возвращает ошибку в случае возникновения проблем при сбросе.
 func (gitRepo *GitRepository) resetRepo() error {
+	logger.Debug("Resetting repository at %s", gitRepo.options.path)
 
 	// Получаем объект Worktree из текущего репозитория
 	wt, err := gitRepo.getRepoWorktree()
@@ -384,6 +434,8 @@ func (gitRepo *GitRepository) resetRepo() error {
 	if err != nil {
 		return fmt.Errorf("failed to reset changes: %v", err)
 	}
+
+	logger.Debug("Successfully reset repository at %s", gitRepo.options.path)
 	return nil
 }
 
@@ -402,8 +454,9 @@ func (gitRepo *GitRepository) getRepoWorktree() (*git.Worktree, error) {
 // Параметр "reason" представляет собой причину "сохранения" коммита.
 // Функция выполняет блокировку мьютекса GitRepository для безопасной работы с данными.
 func (gitRepo *GitRepository) storeCurrentCommit(reason string) error {
-
 	var err error
+
+	logger.Debug("Storing current commit for repository at %s (reason: %s)", gitRepo.options.path, reason)
 
 	// Получаем текущий локальный коммит
 	commit, err := gitRepo.getCommit(false)
@@ -421,13 +474,13 @@ func (gitRepo *GitRepository) storeCurrentCommit(reason string) error {
 	// Снимаем блокировку мьютекса
 	gitRepo.mutex.Unlock()
 
+	logger.Debug("Successfully stored current commit %s for repository at %s", commit.Hash.String(), gitRepo.options.path)
 	return nil
 }
 
 // getLastCommits получает последний локальный или удаленный коммит репозитория
 // в зависимости от указанного сокращенного названия ветки и флага isRemote.
 func (gitRepo *GitRepository) getCommit(isRemote bool) (*object.Commit, error) {
-
 	var ref plumbing.ReferenceName
 
 	// Если требуется получить удаленный коммит
@@ -445,7 +498,7 @@ func (gitRepo *GitRepository) getCommit(isRemote bool) (*object.Commit, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get HEAD reference: %v", err)
 		}
-		ref = plumbing.ReferenceName(localRef.Name())
+		ref = localRef.Name()
 	}
 
 	branchRef, err := gitRepo.repository.Reference(ref, true)
@@ -463,6 +516,7 @@ func (gitRepo *GitRepository) getCommit(isRemote bool) (*object.Commit, error) {
 
 // compareCommitTrees Проверяем наличие изменений между локальным и удаленным коммитами
 func (gitRepo *GitRepository) compareCommitTrees() error {
+	logger.Debug("Comparing commit trees for repository at %s", gitRepo.options.path)
 
 	// Получаем последний коммит локального репозитория
 	localCommit, err := gitRepo.getCommit(false)
@@ -494,6 +548,7 @@ func (gitRepo *GitRepository) compareCommitTrees() error {
 
 	// Изменения найдены
 	if diff.Len() > 0 {
+		logger.Debug("Found %d differences between local and remote commits for repository at %s", diff.Len(), gitRepo.options.path)
 
 		gitRepo.setChangesFlag(true)
 
@@ -503,7 +558,12 @@ func (gitRepo *GitRepository) compareCommitTrees() error {
 			return err
 		}
 
-		gitRepo.storeCurrentCommit("remote")
+		if err := gitRepo.storeCurrentCommit("remote"); err != nil {
+			if logErr := logger.Error("Error storing current commit: %v\n", err); logErr != nil {
+				// Handle the error from logger.Error if needed
+				fmt.Fprintf(os.Stderr, "Error storing current commit: %v\n", err)
+			}
+		}
 
 		err = gitRepo.showCommitMessage()
 		if err != nil {
@@ -511,11 +571,14 @@ func (gitRepo *GitRepository) compareCommitTrees() error {
 		}
 		return nil
 	}
+
+	logger.Debug("No differences found between local and remote commits for repository at %s", gitRepo.options.path)
 	return nil
 }
 
 // compareFiles Проверяем наличие изменений в файлах лольного репозитория
 func (gitRepo *GitRepository) compareFiles() error {
+	logger.Debug("Comparing files for repository at %s", gitRepo.options.path)
 
 	wt, err := gitRepo.getRepoWorktree()
 	if err != nil {
@@ -528,6 +591,7 @@ func (gitRepo *GitRepository) compareFiles() error {
 	}
 
 	if !status.IsClean() {
+		logger.Debug("Found uncommitted changes in repository at %s", gitRepo.options.path)
 
 		gitRepo.setChangesFlag(true)
 
@@ -539,7 +603,9 @@ func (gitRepo *GitRepository) compareFiles() error {
 			return err
 		}
 
-		gitRepo.storeCurrentCommit("local")
+		if err := gitRepo.storeCurrentCommit("local"); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Error storing current commit: %v\n", err)
+		}
 
 		// выводим сообщение в лог
 		err = gitRepo.showCommitMessage()
@@ -549,29 +615,13 @@ func (gitRepo *GitRepository) compareFiles() error {
 		return nil
 	}
 
+	logger.Debug("No uncommitted changes found in repository at %s", gitRepo.options.path)
 	return nil
-}
-
-// resetChangesFlag сбрасывает текущее значение флага "найдены изменения" в значение false
-func (gitRepo *GitRepository) resetChangesFlag() {
-	gitRepo.mutex.Lock()
-	defer gitRepo.mutex.Unlock()
-	gitRepo.hasChanges = false
-}
-
-// setChangesFlag устанавливает текущее значение флага "найдены изменения"
-func (gitRepo *GitRepository) setChangesFlag(hasChanges bool) {
-	if hasChanges {
-		gitRepo.mutex.Lock()
-		defer gitRepo.mutex.Unlock()
-		gitRepo.hasChanges = hasChanges
-	}
 }
 
 // showCommitMessage выводит информацию о последнем сохраненном коммите.
 // Если коммит отсутствует, функция возвращает ошибку.
 func (gitRepo *GitRepository) showCommitMessage() error {
-
 	// Блокировка мьютекса для безопасного доступа к lastCommit
 	gitRepo.mutex.Lock()
 	defer gitRepo.mutex.Unlock()

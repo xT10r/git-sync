@@ -41,11 +41,8 @@ func TestWebhookHandlerFunc(t *testing.T) {
 
 	// Start a goroutine to consume the webhook channel to prevent blocking
 	go func() {
-		for {
-			select {
-			case <-handlers.WebhookCh:
-				// Consume the webhook signal
-			}
+		for range handlers.WebhookCh {
+			// Consume the webhook signal
 		}
 	}()
 
@@ -89,11 +86,8 @@ func TestWebhookHandlerFuncInvalidMethod(t *testing.T) {
 
 	// Start a goroutine to consume the webhook channel to prevent blocking
 	go func() {
-		for {
-			select {
-			case <-handlers.WebhookCh:
-				// Consume the webhook signal
-			}
+		for range handlers.WebhookCh {
+			// Consume the webhook signal
 		}
 	}()
 
@@ -129,11 +123,8 @@ func TestWebhookHandlerFuncInvalidContentType(t *testing.T) {
 
 	// Start a goroutine to consume the webhook channel to prevent blocking
 	go func() {
-		for {
-			select {
-			case <-handlers.WebhookCh:
-				// Consume the webhook signal
-			}
+		for range handlers.WebhookCh {
+			// Consume the webhook signal
 		}
 	}()
 
@@ -209,11 +200,8 @@ func TestWebhookResponseStructure(t *testing.T) {
 
 	// Start a goroutine to consume the webhook channel to prevent blocking
 	go func() {
-		for {
-			select {
-			case <-handlers.WebhookCh:
-				// Consume the webhook signal
-			}
+		for range handlers.WebhookCh {
+			// Consume the webhook signal
 		}
 	}()
 

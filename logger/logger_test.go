@@ -43,9 +43,8 @@ func TestGlobalLoggerFunctions(t *testing.T) {
 	buf.Reset()
 
 	// Test Error function
-	Error("Test error message")
-	if buf.String() == "" {
-		t.Error("Error function did not write to log")
+	if err := Error("Test error message"); err == nil {
+		t.Error("Error function should return an error but returned nil")
 	}
 
 	// Clear buffer

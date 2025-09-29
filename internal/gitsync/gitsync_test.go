@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package gitsync_test
+package gitsync
 
 import (
 	"context"
 	"git-sync/internal/config"
-	"git-sync/internal/gitsync"
 	"git-sync/internal/handlers"
 	"git-sync/mock"
 	"testing"
@@ -25,7 +24,6 @@ import (
 )
 
 func TestStart(t *testing.T) {
-
 	ctx := context.Background()
 
 	// Создаем макет флагов для использования в тесте
@@ -52,7 +50,7 @@ func TestStart(t *testing.T) {
 	defer cancel()
 
 	// Создаем экземпляр gitsync с использованием макета флагов и фейкового контекста
-	gitSync, err := gitsync.NewGitSync(mockFlags, cfg, fakeCtx, "test-repo")
+	gitSync, err := NewGitSync(mockFlags, cfg, fakeCtx, "test-repo")
 	if err != nil {
 		t.Fatalf("Error initializing GitSync: %v", err)
 	}

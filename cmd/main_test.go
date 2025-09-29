@@ -21,13 +21,20 @@ import (
 	"testing"
 )
 
+// Test constants to avoid goconst warnings
+const (
+	testRepoURL   = "https://gitlab.com/test/repo.git"
+	testBranch    = "main"
+	testLocalPath = "/tmp/test-repo"
+)
+
 // TestCheckRequiredConfigValuesForRepo tests the checkRequiredConfigValuesForRepo function
 func TestCheckRequiredConfigValuesForRepo(t *testing.T) {
 	// Test with valid configuration
 	repoConfig := &config.RepositoryConfig{}
-	repoConfig.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
-	repoConfig.Gitlab.RepoBranch = "main"
-	repoConfig.Sync.LocalPath = "/tmp/test-repo"
+	repoConfig.Gitlab.RepoURL = testRepoURL
+	repoConfig.Gitlab.RepoBranch = testBranch
+	repoConfig.Sync.LocalPath = testLocalPath
 
 	err := checkRequiredConfigValuesForRepo("test-repo", repoConfig)
 	if err != nil {
@@ -36,8 +43,8 @@ func TestCheckRequiredConfigValuesForRepo(t *testing.T) {
 
 	// Test with missing repo URL
 	repoConfigMissingURL := &config.RepositoryConfig{}
-	repoConfigMissingURL.Gitlab.RepoBranch = "main"
-	repoConfigMissingURL.Sync.LocalPath = "/tmp/test-repo"
+	repoConfigMissingURL.Gitlab.RepoBranch = testBranch
+	repoConfigMissingURL.Sync.LocalPath = testLocalPath
 
 	err = checkRequiredConfigValuesForRepo("test-repo", repoConfigMissingURL)
 	if err == nil {
@@ -46,8 +53,8 @@ func TestCheckRequiredConfigValuesForRepo(t *testing.T) {
 
 	// Test with missing repo branch
 	repoConfigMissingBranch := &config.RepositoryConfig{}
-	repoConfigMissingBranch.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
-	repoConfigMissingBranch.Sync.LocalPath = "/tmp/test-repo"
+	repoConfigMissingBranch.Gitlab.RepoURL = testRepoURL
+	repoConfigMissingBranch.Sync.LocalPath = testLocalPath
 
 	err = checkRequiredConfigValuesForRepo("test-repo", repoConfigMissingBranch)
 	if err == nil {
@@ -56,8 +63,8 @@ func TestCheckRequiredConfigValuesForRepo(t *testing.T) {
 
 	// Test with missing local path
 	repoConfigMissingPath := &config.RepositoryConfig{}
-	repoConfigMissingPath.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
-	repoConfigMissingPath.Gitlab.RepoBranch = "main"
+	repoConfigMissingPath.Gitlab.RepoURL = testRepoURL
+	repoConfigMissingPath.Gitlab.RepoBranch = testBranch
 
 	err = checkRequiredConfigValuesForRepo("test-repo", repoConfigMissingPath)
 	if err == nil {
@@ -76,8 +83,8 @@ func TestValidateConfigValuesForRepo(t *testing.T) {
 
 	// Test with valid configuration
 	repoConfig := &config.RepositoryConfig{}
-	repoConfig.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
-	repoConfig.Gitlab.RepoBranch = "main"
+	repoConfig.Gitlab.RepoURL = testRepoURL
+	repoConfig.Gitlab.RepoBranch = testBranch
 	repoConfig.Sync.LocalPath = tempDir
 	repoConfig.Sync.Interval = 30
 
@@ -89,7 +96,7 @@ func TestValidateConfigValuesForRepo(t *testing.T) {
 	// Test with invalid URL
 	repoConfigInvalidURL := &config.RepositoryConfig{}
 	repoConfigInvalidURL.Gitlab.RepoURL = "invalid-url"
-	repoConfigInvalidURL.Gitlab.RepoBranch = "main"
+	repoConfigInvalidURL.Gitlab.RepoBranch = testBranch
 	repoConfigInvalidURL.Sync.LocalPath = tempDir
 	repoConfigInvalidURL.Sync.Interval = 30
 
@@ -100,8 +107,8 @@ func TestValidateConfigValuesForRepo(t *testing.T) {
 
 	// Test with non-existent local path
 	repoConfigInvalidPath := &config.RepositoryConfig{}
-	repoConfigInvalidPath.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
-	repoConfigInvalidPath.Gitlab.RepoBranch = "main"
+	repoConfigInvalidPath.Gitlab.RepoURL = testRepoURL
+	repoConfigInvalidPath.Gitlab.RepoBranch = testBranch
 	repoConfigInvalidPath.Sync.LocalPath = "/non/existent/path"
 	repoConfigInvalidPath.Sync.Interval = 30
 
@@ -112,8 +119,8 @@ func TestValidateConfigValuesForRepo(t *testing.T) {
 
 	// Test with invalid interval
 	repoConfigInvalidInterval := &config.RepositoryConfig{}
-	repoConfigInvalidInterval.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
-	repoConfigInvalidInterval.Gitlab.RepoBranch = "main"
+	repoConfigInvalidInterval.Gitlab.RepoURL = testRepoURL
+	repoConfigInvalidInterval.Gitlab.RepoBranch = testBranch
 	repoConfigInvalidInterval.Sync.LocalPath = tempDir
 	repoConfigInvalidInterval.Sync.Interval = -1
 
@@ -124,8 +131,8 @@ func TestValidateConfigValuesForRepo(t *testing.T) {
 
 	// Test with zero interval
 	repoConfigZeroInterval := &config.RepositoryConfig{}
-	repoConfigZeroInterval.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
-	repoConfigZeroInterval.Gitlab.RepoBranch = "main"
+	repoConfigZeroInterval.Gitlab.RepoURL = testRepoURL
+	repoConfigZeroInterval.Gitlab.RepoBranch = testBranch
 	repoConfigZeroInterval.Sync.LocalPath = tempDir
 	repoConfigZeroInterval.Sync.Interval = 0
 

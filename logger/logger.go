@@ -183,6 +183,9 @@ func Error(format string, v ...interface{}) error {
 
 // Fatal logs an error message and exits the program
 func Fatal(format string, v ...interface{}) {
-	GetLogger().Error(format, v...)
+	if err := GetLogger().Error(format, v...); err != nil {
+		// If we can't log the error, at least print it to stderr
+		fmt.Fprintf(os.Stderr, format+"\n", v...)
+	}
 	os.Exit(1)
 }

@@ -232,13 +232,15 @@ func validateFlagSyncInterval(fs *flag.FlagSet, fn string, desc string) error {
 		return fmt.Errorf("%s is not set", desc)
 	}
 
-	if duration, err := time.ParseDuration(fv); err != nil {
+	duration, err := time.ParseDuration(fv)
+	if err != nil {
 		return fmt.Errorf("failed to convert sync interval string to duration")
-	} else {
-		if duration <= 0 {
-			return fmt.Errorf("sync interval must be positive")
-		}
 	}
+
+	if duration <= 0 {
+		return fmt.Errorf("sync interval must be positive")
+	}
+
 	return nil
 }
 

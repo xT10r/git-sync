@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -38,7 +38,6 @@ func TestGetFlagValue(t *testing.T) {
 }
 
 func TestGetEnv(t *testing.T) {
-
 	// Подготовим структуру для строковых переменных окружения
 	type getEnvTestCase struct {
 		envKey   string
@@ -55,8 +54,14 @@ func TestGetEnv(t *testing.T) {
 	// Выполнение тестов
 	for _, tc := range testCases {
 		t.Run(tc.envKey, func(t *testing.T) {
-			os.Setenv(tc.envKey, tc.envValue)
-			defer os.Unsetenv(tc.envKey)
+			if err := os.Setenv(tc.envKey, tc.envValue); err != nil {
+				t.Errorf("Failed to set environment variable: %v", err)
+			}
+			defer func() {
+				if err := os.Unsetenv(tc.envKey); err != nil {
+					t.Errorf("Failed to unset environment variable: %v", err)
+				}
+			}()
 			value := getEnv(tc.envKey, tc.expected)
 			if value != tc.expected {
 				t.Errorf("Expected '%s', got '%s'", tc.expected, value)
@@ -66,7 +71,6 @@ func TestGetEnv(t *testing.T) {
 }
 
 func TestGetEnvDuration(t *testing.T) {
-
 	// Подготовим структуру для переменных окружения длительности
 	type getEnvTestCase struct {
 		envKey   string
@@ -83,8 +87,14 @@ func TestGetEnvDuration(t *testing.T) {
 	// Выполнение тестов
 	for _, tc := range testCases {
 		t.Run(tc.envKey, func(t *testing.T) {
-			os.Setenv(tc.envKey, tc.envValue)
-			defer os.Unsetenv(tc.envKey)
+			if err := os.Setenv(tc.envKey, tc.envValue); err != nil {
+				t.Errorf("Failed to set environment variable: %v", err)
+			}
+			defer func() {
+				if err := os.Unsetenv(tc.envKey); err != nil {
+					t.Errorf("Failed to unset environment variable: %v", err)
+				}
+			}()
 			value := getEnvDuration(tc.envKey, tc.expected)
 			if value != tc.expected {
 				t.Errorf("Expected '%s', got '%s'", tc.expected, value)
@@ -94,7 +104,6 @@ func TestGetEnvDuration(t *testing.T) {
 }
 
 func TestValidateFlagURL(t *testing.T) {
-
 	tests := []struct {
 		name      string
 		flagName  string
@@ -515,8 +524,14 @@ func TestGetEnvBool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variable if needed
 			if tt.envValue != "" {
-				os.Setenv(tt.envKey, tt.envValue)
-				defer os.Unsetenv(tt.envKey)
+				if err := os.Setenv(tt.envKey, tt.envValue); err != nil {
+					t.Errorf("Failed to set environment variable: %v", err)
+				}
+				defer func() {
+					if err := os.Unsetenv(tt.envKey); err != nil {
+						t.Errorf("Failed to unset environment variable: %v", err)
+					}
+				}()
 			}
 
 			value := getEnvBool(tt.envKey, tt.defaultValue)

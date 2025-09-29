@@ -1,10 +1,10 @@
-// Copyright 2024 Aleksey Dobshikov
+// Copyright 2025 Aleksey Dobshikov
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -107,12 +107,19 @@ func (m *Gitter) CommitHash() string {
 func MockConfig() *config.Config {
 	cfg := &config.Config{}
 
-	cfg.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
-	cfg.Gitlab.RepoBranch = "main"
-	cfg.Gitlab.RepoAuth.User = "testuser"
-	cfg.Gitlab.RepoAuth.Token = "testtoken"
-	cfg.Sync.LocalPath = "/tmp/testrepo"
-	cfg.Sync.Interval = 30
+	// Initialize the repositories map
+	cfg.Repositories = make(map[string]config.RepositoryConfig)
+
+	// Create a mock repository config
+	repoConfig := config.RepositoryConfig{}
+	repoConfig.Gitlab.RepoURL = "https://gitlab.com/test/repo.git"
+	repoConfig.Gitlab.RepoBranch = "main"
+	repoConfig.Gitlab.RepoAuth.User = "testuser"
+	repoConfig.Gitlab.RepoAuth.Token = "testtoken"
+	repoConfig.Sync.LocalPath = "/tmp/testrepo"
+	repoConfig.Sync.Interval = 30
+
+	cfg.Repositories["test-repo"] = repoConfig
 
 	return cfg
 }
@@ -121,12 +128,19 @@ func MockConfig() *config.Config {
 func MockConfigWithValues(repoURL, repoBranch, user, token, localPath string, interval int) *config.Config {
 	cfg := &config.Config{}
 
-	cfg.Gitlab.RepoURL = repoURL
-	cfg.Gitlab.RepoBranch = repoBranch
-	cfg.Gitlab.RepoAuth.User = user
-	cfg.Gitlab.RepoAuth.Token = token
-	cfg.Sync.LocalPath = localPath
-	cfg.Sync.Interval = interval
+	// Initialize the repositories map
+	cfg.Repositories = make(map[string]config.RepositoryConfig)
+
+	// Create a mock repository config
+	repoConfig := config.RepositoryConfig{}
+	repoConfig.Gitlab.RepoURL = repoURL
+	repoConfig.Gitlab.RepoBranch = repoBranch
+	repoConfig.Gitlab.RepoAuth.User = user
+	repoConfig.Gitlab.RepoAuth.Token = token
+	repoConfig.Sync.LocalPath = localPath
+	repoConfig.Sync.Interval = interval
+
+	cfg.Repositories["test-repo"] = repoConfig
 
 	return cfg
 }

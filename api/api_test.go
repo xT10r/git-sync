@@ -16,11 +16,15 @@ package api
 
 import (
 	"encoding/json"
+	"git-sync/internal/version"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+)
 
-	"git-sync/internal/version" // Add version import
+// Test constants to avoid goconst warnings
+const (
+	expectedContentType = "application/json; charset=utf-8"
 )
 
 func TestHandlerStatus(t *testing.T) {
@@ -44,7 +48,6 @@ func TestHandlerStatus(t *testing.T) {
 	}
 
 	// Check the content type
-	expectedContentType := "application/json; charset=utf-8"
 	if contentType := rr.Header().Get("Content-Type"); contentType != expectedContentType {
 		t.Errorf("handler returned wrong content type: got %v want %v",
 			contentType, expectedContentType)
@@ -87,7 +90,6 @@ func TestHandlerHealth(t *testing.T) {
 	}
 
 	// Check the content type
-	expectedContentType := "application/json; charset=utf-8"
 	if contentType := rr.Header().Get("Content-Type"); contentType != expectedContentType {
 		t.Errorf("handler returned wrong content type: got %v want %v",
 			contentType, expectedContentType)
@@ -130,7 +132,6 @@ func TestHandlerReady(t *testing.T) {
 	}
 
 	// Check the content type
-	expectedContentType := "application/json; charset=utf-8"
 	if contentType := rr.Header().Get("Content-Type"); contentType != expectedContentType {
 		t.Errorf("handler returned wrong content type: got %v want %v",
 			contentType, expectedContentType)
