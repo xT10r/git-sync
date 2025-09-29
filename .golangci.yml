@@ -1,0 +1,67 @@
+# Options for analysis running.
+run:
+  # Timeout for analysis, e.g. 30s, 5m.
+  # Default: 1m
+  timeout: 5m
+
+  # Include test files or not.
+  # Default: true
+  tests: true
+
+# Output configuration options.
+output:
+  # Format: colored-line-number|line-number|json|tab|checkstyle|code-climate
+  # Default: colored-line-number
+  formats:
+  - format: colored-line-number
+  - format: line-number
+
+# All available linters: https://golangci-lint.run/usage/linters/
+linters:
+  # Disable all linters.
+  disable-all: true
+
+  # Enable specific linters.
+  enable:
+  - errcheck # Errcheck is a program for checking for unchecked errors in go programs.
+  - gosimple # Linter for Go source code that specializes in simplifying code.
+  - govet # Vet examines Go source code and reports suspicious constructs.
+  - ineffassign # Detects when assignments to existing variables are not used.
+  - staticcheck # Staticcheck is a go vet on steroids, applying a ton of static analysis checks.
+  - typecheck # Like go vet, but also checks for type errors.
+  - unused # Checks for unused constants, variables, functions and types.
+  - bodyclose # Checks whether HTTP response body is closed successfully.
+  - dupl # Tool for code clone detection.
+  - goconst # Finds repeated strings that could be replaced by a constant.
+  - gocritic # The most opinionated Go source code linter.
+  - gofmt # Gofmt checks whether code was gofmt-ed.
+  - goimports # Goimports does everything that gofmt does. Additionally it checks unused imports.
+  - misspell # Finds commonly misspelled English words in comments.
+  - unconvert # Remove unnecessary type conversions.
+  - whitespace # Tool for detection of leading and trailing whitespace.
+
+# Settings for specific linters.
+linters-settings:
+  # Check for leading and trailing whitespace.
+  whitespace:
+    # Check for leading whitespace.
+    # Default: true
+    leading: true
+
+    # Check for trailing whitespace.
+    # Default: true
+    trailing: true
+
+# Issues configuration.
+issues:
+  # List of regexps of issue texts to exclude.
+  # Default: []
+  exclude:
+  - "Error return value of .(.*\\.WriteString|.*\\.Write|.*\\.Close|os\\.Remove(All)?|os\\.(Mk|Remove)Dir|.*\\.Release) is not checked"
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+  # Exclude some linters from running on tests files.
+  - path: _test\.go
+    linters:
+    - gocritic
+    - dupl
