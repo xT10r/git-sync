@@ -24,6 +24,18 @@ on:
         description: 'Build images for latest release tag'
         type: boolean
         default: false
+      local_build:
+        description: 'Local build: do not push, load image into local Docker, single-arch amd64'
+        type: boolean
+        default: false
+      skip_supply_chain:
+        description: 'Skip SBOM/Trivy/SLSA steps'
+        type: boolean
+        default: false
+      skip_signing:
+        description: 'Skip cosign signing steps'
+        type: boolean
+        default: false
   schedule:
     - cron: '17 3 * * *'   # every day at 03:17 UTC
 
@@ -33,8 +45,12 @@ permissions:
   id-token: write          # for keyless cosign
 
 jobs:
+
   precheck:
     uses: ./.github/workflows/common.yml
+    with:
+      allow_fail: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.local_build == 'true' }} # for local builds
+      skip_lint:  ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.local_build == 'true' }} # for local builds
 
   docker:
     name: Build & Push Container
@@ -67,18 +83,18 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      # GHCR login (всегда, кроме PR)
+      # GHCR login (skip for PR and local_build)
       - name: Login GHCR
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.event.inputs.local_build != 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Docker Hub login (только на тегах)
+      # Docker Hub login (tags only; skip for local_build)
       - name: Login Docker Hub
-        if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/') && github.event.inputs.local_build != 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -101,7 +117,7 @@ jobs:
           echo "DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
           echo "DIRTY=false" >> $GITHUB_OUTPUT
 
-          # Канонический тег для подписи/скана
+          # Canonical tag (for signing/scan where applicable)
           if [[ "$VERSION" == dev ]]; then
             echo "CANONICAL_TAG=dev-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
           elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
@@ -110,11 +126,10 @@ jobs:
             echo "CANONICAL_TAG=${VERSION}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
           fi
 
-      # Метаданные для PUSH-событий
-      # ВАЖНО: Docker Hub добавляем в images только на тегах.
+      # Metadata for push events (semver + suffixes) — not needed for local_build
       - name: Docker metadata (tags for push)
         id: meta
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.event.inputs.local_build != 'true'
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -128,32 +143,39 @@ jobs:
           labels: |
             org.opencontainers.image.title=git-sync
 
-      # Теги для schedule/dispatch → GHCR only
-      - name: Compute tags (for schedule/dispatch)
+      # Tags for schedule/dispatch OR local_build — manual
+      - name: Compute tags (for schedule/dispatch/local)
         id: tags
-        if: github.event_name != 'push'
+        if: github.event_name != 'push' || github.event.inputs.local_build == 'true'
         shell: bash
         run: |
           ver='${{ steps.ver.outputs.VERSION }}'
           suf='${{ matrix.suffix }}'
-          if [[ "$ver" == "dev" ]]; then
-            echo "TAGS=ghcr.io/${{ github.repository }}:dev-${suf},docker.io/xt10r/git-sync:dev-${suf}" >> $GITHUB_OUTPUT
+          if [[ "${{ github.event.inputs.local_build }}" == "true" ]]; then
+            # local tag (loaded into local Docker)
+            echo "TAGS=git-sync:local-${suf}" >> $GITHUB_OUTPUT
+            echo "GHCR_TAG=git-sync:local-${suf}" >> $GITHUB_OUTPUT
           else
-            major="${ver#v}"; major="${major%%.*}"
-            minor="${ver#v${major}.}"; minor="${minor%%.*}"
-            echo "TAGS=ghcr.io/${{ github.repository }}:${ver}-${suf},ghcr.io/${{ github.repository }}:v${major}.${minor}-${suf},ghcr.io/${{ github.repository }}:v${major}-${suf},ghcr.io/${{ github.repository }}:latest-${suf},docker.io/xt10r/git-sync:${ver}-${suf},docker.io/xt10r/git-sync:v${major}.${minor}-${suf},docker.io/xt10r/git-sync:v${major}-${suf},docker.io/xt10r/git-sync:latest-${suf}" >> $GITHUB_OUTPUT
+            if [[ "$ver" == "dev" ]]; then
+              echo "TAGS=ghcr.io/${{ github.repository }}:dev-${suf}" >> $GITHUB_OUTPUT
+            else
+              major="${ver#v}"; major="${major%%.*}"
+              minor="${ver#v${major}.}"; minor="${minor%%.*}"
+              echo "TAGS=ghcr.io/${{ github.repository }}:${ver}-${suf},ghcr.io/${{ github.repository }}:v${major}.${minor}-${suf},ghcr.io/${{ github.repository }}:v${major}-${suf},ghcr.io/${{ github.repository }}:latest-${suf}" >> $GITHUB_OUTPUT
+            fi
+            echo "GHCR_TAG=ghcr.io/${{ github.repository }}:${{ steps.ver.outputs.CANONICAL_TAG }}" >> $GITHUB_OUTPUT
           fi
-          echo "GHCR_TAG=ghcr.io/${{ github.repository }}:${{ steps.ver.outputs.CANONICAL_TAG }}" >> $GITHUB_OUTPUT
 
-      - name: Build & Push (amd64 + arm64)
+      - name: Build & Push (multi-arch or local)
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ github.event_name == 'push' && steps.meta.outputs.tags || steps.tags.outputs.TAGS }}
+          push: ${{ github.event_name != 'pull_request' && github.event.inputs.local_build != 'true' }}
+          load: ${{ github.event.inputs.local_build == 'true' }}
+          platforms: ${{ github.event.inputs.local_build == 'true' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          tags: ${{ (github.event_name == 'push' && github.event.inputs.local_build != 'true') && steps.meta.outputs.tags || steps.tags.outputs.TAGS }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.ver.outputs.VERSION }}
@@ -161,7 +183,6 @@ jobs:
             DATE=${{ steps.ver.outputs.DATE }}
             DIRTY=${{ steps.ver.outputs.DIRTY }}
             RUNTIME_IMAGE=${{ matrix.image }}
-            RUNTIME_FAMILY=${{ matrix.family }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -174,9 +195,10 @@ jobs:
       - name: Install crane
         uses: imjasonh/setup-crane@v0.4
 
-      # Иммутабельные refs (GHCR digest у нас уже есть; Docker Hub — только на тегах)
+      # Immutable refs (only when pushing)
       - name: Compute immutable refs (by digest)
         id: img
+        if: github.event.inputs.local_build != 'true'
         shell: bash
         run: |
           GHCR_DIGEST='${{ steps.build.outputs.digest }}'
@@ -190,45 +212,153 @@ jobs:
             echo "DOCKER_REF=docker.io/xt10r/git-sync@${DOCKER_DIGEST}" >> $GITHUB_OUTPUT
           fi
 
-      # Подписываем GHCR
+      # Validate OCI labels for local builds (no push)
+      - name: Validate OCI labels (local)
+        if: github.event.inputs.local_build == 'true'
+        shell: bash
+        env:
+          EXPECTED_BASE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          IMG="git-sync:local-${{ matrix.suffix }}"
+          # Получим только словарь лейблов
+          docker image inspect "$IMG" --format '{{json .Config.Labels }}' > labels.json
+
+          python3 - <<'PY'
+          import json, os, re, sys
+          with open('labels.json') as f:
+              L = json.load(f) or {}
+          req = [
+              "org.opencontainers.image.title",
+              "org.opencontainers.image.description",
+              "org.opencontainers.image.url",
+              "org.opencontainers.image.source",
+              "org.opencontainers.image.version",
+              "org.opencontainers.image.revision",
+              "org.opencontainers.image.created",
+              "org.opencontainers.image.licenses",
+              "org.opencontainers.image.vendor",
+              "org.opencontainers.image.base.name",
+          ]
+          errs=[]
+          missing=[k for k in req if not L.get(k)]
+          if missing: errs.append(f"missing/empty: {missing}")
+          if L.get("org.opencontainers.image.title")!="git-sync":
+              errs.append("title mismatch (expected 'git-sync')")
+          if L.get("org.opencontainers.image.licenses")!="Apache-2.0":
+              errs.append("licenses must be 'Apache-2.0'")
+          if L.get("org.opencontainers.image.vendor")!="xt10r":
+              errs.append("vendor must be 'xt10r'")
+          exp_base=os.environ.get("EXPECTED_BASE","")
+          if exp_base and L.get("org.opencontainers.image.base.name")!=exp_base:
+              errs.append(f"base.name mismatch: {L.get('org.opencontainers.image.base.name')} != {exp_base}")
+          rev=L.get("org.opencontainers.image.revision","")
+          if not re.fullmatch(r"[0-9a-f]{7,40}", rev):
+              errs.append("revision is not a git SHA (7..40 hex)")
+          created=L.get("org.opencontainers.image.created","")
+          if not re.match(r"\d{4}-\d{2}-\d{2}T", created):
+              errs.append("created must look like RFC3339 timestamp")
+          if errs:
+              print("\n".join(errs)); sys.exit(1)
+          print("Labels OK (local)")
+          PY
+
+      # Validate OCI labels for pushed images on GHCR (by digest)
+      - name: Validate OCI labels (remote GHCR)
+        if: github.event.inputs.local_build != 'true'
+        shell: bash
+        env:
+          EXPECTED_BASE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          REF="${{ steps.img.outputs.GHCR_REF }}"
+          # Забираем config из реестра и вытаскиваем секцию Labels
+          crane config "$REF" > cfg.json
+
+          python3 - <<'PY'
+          import json, os, re, sys
+          with open('cfg.json') as f:
+              data=json.load(f)
+          L=(data.get("config") or {}).get("Labels") or {}
+          req = [
+              "org.opencontainers.image.title",
+              "org.opencontainers.image.description",
+              "org.opencontainers.image.url",
+              "org.opencontainers.image.source",
+              "org.opencontainers.image.version",
+              "org.opencontainers.image.revision",
+              "org.opencontainers.image.created",
+              "org.opencontainers.image.licenses",
+              "org.opencontainers.image.vendor",
+              "org.opencontainers.image.base.name",
+          ]
+          errs=[]
+          missing=[k for k in req if not L.get(k)]
+          if missing: errs.append(f"missing/empty: {missing}")
+          if L.get("org.opencontainers.image.title")!="git-sync":
+              errs.append("title mismatch (expected 'git-sync')")
+          if L.get("org.opencontainers.image.licenses")!="Apache-2.0":
+              errs.append("licenses must be 'Apache-2.0'")
+          if L.get("org.opencontainers.image.vendor")!="xt10r":
+              errs.append("vendor must be 'xt10r'")
+          exp_base=os.environ.get("EXPECTED_BASE","")
+          if exp_base and L.get("org.opencontainers.image.base.name")!=exp_base:
+              errs.append(f"base.name mismatch: {L.get('org.opencontainers.image.base.name')} != {exp_base}")
+          rev=L.get("org.opencontainers.image.revision","")
+          if not re.fullmatch(r"[0-9a-f]{7,40}", rev):
+              errs.append("revision is not a git SHA (7..40 hex)")
+          created=L.get("org.opencontainers.image.created","")
+          if not re.match(r"\d{4}-\d{2}-\d{2}T", created):
+              errs.append("created must look like RFC3339 timestamp")
+          if errs:
+              print("\n".join(errs)); sys.exit(1)
+          print("Labels OK (remote)")
+          PY
+          
+      # Sign GHCR image
       - name: Cosign sign image (GHCR)
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.event.inputs.local_build != 'true' && github.event.inputs.skip_signing != 'true'
         env: { COSIGN_EXPERIMENTAL: "1" }
         run: |
           cosign sign --yes "${{ steps.img.outputs.GHCR_REF }}"
 
-      # Подписываем Docker Hub — только на тегах
+      # Sign Docker Hub image (tags only)
       - name: Cosign sign image (Docker Hub)
-        if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/')
+        if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/') && github.event.inputs.local_build != 'true' && github.event.inputs.skip_signing != 'true'
         env: { COSIGN_EXPERIMENTAL: "1" }
         run: |
           cosign sign --yes "${{ steps.img.outputs.DOCKER_REF }}"
 
-      # SBOM на GHCR
+      # SBOM to GHCR
       - name: Generate SBOM (CycloneDX JSON)
+        if: github.event.inputs.local_build != 'true' && github.event.inputs.skip_supply_chain != 'true'
         run: |
           syft packages "${{ steps.img.outputs.GHCR_REF }}" -o cyclonedx-json > sbom.cdx.json
 
       - name: Attach SBOM to image (GHCR)
+        if: github.event.inputs.local_build != 'true' && github.event.inputs.skip_supply_chain != 'true'
         run: |
           cosign attach sbom --sbom sbom.cdx.json --type cyclonedx "${{ steps.img.outputs.GHCR_REF }}"
 
       - name: Sign SBOM artifact (GHCR)
+        if: github.event.inputs.local_build != 'true' && github.event.inputs.skip_supply_chain != 'true' && github.event.inputs.skip_signing != 'true'
         env: { COSIGN_EXPERIMENTAL: "1" }
         run: |
           SBOM_REF=$(cosign triangulate --type sbom "${{ steps.img.outputs.GHCR_REF }}")
           cosign sign --yes "$SBOM_REF"
 
-      # SLSA (к GHCR digest)
+      # SLSA provenance (GHCR digest)
       - name: Attest build provenance
+        if: github.event.inputs.local_build != 'true' && github.event.inputs.skip_supply_chain != 'true'
         uses: actions/attest-build-provenance@v3
         with:
           subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.img.outputs.GHCR_DIGEST }}
           push-to-registry: true
 
-      # Trivy по GHCR digest
+      # Trivy scan (GHCR digest)
       - name: Trivy scan (image)
+        if: github.event.inputs.local_build != 'true' && github.event.inputs.skip_supply_chain != 'true'
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: ghcr.io/${{ github.repository }}@${{ steps.img.outputs.GHCR_DIGEST }}

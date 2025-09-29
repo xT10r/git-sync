@@ -31,10 +31,6 @@ fmtcoverage.html
 # Additional documentation
 TODO
 
-!docs/**/*.md
-!README.md
-!CHANGELOG.md
-
 # Binary files
 *.exe
 
