@@ -32,3 +32,31 @@ make build-windows
 # Build Windows executable
 .\scripts\build-windows.ps1
 ```
+
+## Code Quality
+
+### With Make (Linux/macOS)
+
+```bash
+# Run comprehensive verification (tests, linting, coverage)
+make verify
+
+# Run golangci-lint using Docker
+make lint
+
+# Run golangci-lint locally (requires golangci-lint installation)
+make lint-local
+
+# Run SonarQube scanner
+make sonar
+
+# Run vulnerability scan
+make vuln
+```
+
+### Without Make (Windows)
+
+```powershell
+# Run golangci-lint (will automatically download if not present)
+.\scripts\lint-windows.ps1
+```
