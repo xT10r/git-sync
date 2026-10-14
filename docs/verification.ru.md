@@ -16,7 +16,7 @@
 | Darwin arm64 и Windows amd64 cross-build | пройдены; это не runtime-тесты |
 | actionlint v1.7.12 для workflows | пройден |
 | govulncheck v1.9.0 на Go 1.27.2 | вызываемых и импортируемых уязвимостей не найдено; одна module-only запись описана ниже |
-| Docker build/run и Kubernetes | локально не выполнялись: Docker отсутствует; добавлен отдельный container smoke workflow |
+| Docker build/run и Kubernetes | Docker локально недоступен; Container smoke пройден на GitHub Actions (ссылка ниже); Kubernetes не проверялся |
 
 Go 1.27.2 загружен с официального сервера с проверкой SHA256 из go.dev/dl. Toolchains установлены вне репозитория. go.mod требует Go 1.26.0. Основные зависимости: go-git v5.19.3, prometheus/client_golang v1.25.0, x/sys v0.49.0, x/net v0.60.0.
 
@@ -26,7 +26,7 @@ Go 1.27.2 загружен с официального сервера с про�
 - httpserver: 85.1%;
 - snapshot: 77.8%;
 - syncer: 93.7%;
-- общий показатель: 75.9%, включая testutil без собственного покрытия.
+- общий показатель: 76.0%, включая testutil без собственного покрытия.
 
 ## Проверяемые сценарии
 
@@ -52,7 +52,7 @@ BenchmarkUnchangedSnapshot, Go 1.27.2, Linux amd64, AMD EPYC 9V74, 10 итера
 
 Первый GitHub Container smoke успешно собрал образ, но обнаружил зависимость стандартного file transport go-git от внешнего git-upload-pack. На хосте тесты проходили благодаря установленному Git, а в scratch-образе fetch не работал.
 
-Исправление: file transport регистрируется при инициализации пакета как встроенный server/client go-git с загрузкой repository storage. Runtime-изменений protocol registry нет. Добавлен тест с пустым PATH для абсолютного пути и file URL; локальный transport больше не требует системного Git. После изменения повторены race/vet, обе версии Go, cross-build и vulnerability scan. Повторный container workflow проверяет исправление в реальном образе.
+Исправление: file transport регистрируется при инициализации пакета как встроенный server/client go-git с загрузкой repository storage. Runtime-изменений protocol registry нет. Добавлен тест с пустым PATH для абсолютного пути и file URL; локальный transport больше не требует системного Git. После изменения повторены race/vet, обе версии Go, cross-build и vulnerability scan. Повторный container workflow успешно проверил исправление в реальном образе.
 
 ## Оставшиеся ограничения и выпуск
 
@@ -60,7 +60,15 @@ BenchmarkUnchangedSnapshot, Go 1.27.2, Linux amd64, AMD EPYC 9V74, 10 итера
 - Нет exponential backoff/jitter, SSH, полной поддержки LFS/submodules/symlinks, secret files и автоматического ремонта повреждённого cache.
 - Windows runtime не реализован; Linux проверен, другие платформы/FS требуют runtime-проверок.
 - Atomic pointer не гарантирует набор нескольких open без закрепления reader snapshot и не обещает power-loss durability.
-- Runtime container workflow подготовлен, но его наличие само по себе не означает успешного прохождения.
+- Container smoke пройден на GitHub-hosted runner; это не заменяет проверку Kubernetes и целевого storage class.
 - Новый root/path/metrics/API несовместимы с v1. Перед merge/release провести миграционную проверку в целевом окружении, включая storage class, UID/GID, секреты и возврат к прежнему образу/volume.
 
 Ветки main и develop не изменены. Проверенные изменения сохраняются в feature/git-sync-reliability.
+
+## Подтверждённые результаты GitHub Actions
+
+Код проверен на коммите `a0a68827fb1016a9adcbf0cf788a818c7534ae05`:
+- [Test: Go 1.26.9 и 1.27.2](https://github.com/xT10r/git-sync/actions/runs/38534586203) — success; vet, race/repeated tests, vulnerability scan, binary/cross-build и coverage artifacts.
+- [Container smoke](https://github.com/xT10r/git-sync/actions/runs/38534585882) — success; image build, запуск non-root с read-only filesystem, две публикации, сохранение первой версии и last-good при удалении remote-ветки, readiness и SIGTERM/exit 0.
+
+Следующий коммит меняет только этот отчёт; код после указанных проверок не изменяется. Повторный запуск CI для фиксации ссылок пропущен через стандартный маркер skip ci.
