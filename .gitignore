@@ -6,5 +6,7 @@
 logic.md
 Dockerfile.example
 .config/**/*
-internal/config/config.go
 fmtcoverage.html
+
+/build/
+/coverage.out

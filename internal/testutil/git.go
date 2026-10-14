@@ -13,12 +13,12 @@ import (
 )
 
 type Remote struct {
-	T    *testing.T
+	T    testing.TB
 	Path string
 	Repo *git.Repository
 }
 
-func NewRemote(t *testing.T) *Remote {
+func NewRemote(t testing.TB) *Remote {
 	t.Helper()
 	path := t.TempDir()
 	repo, err := git.PlainInit(path, false)
