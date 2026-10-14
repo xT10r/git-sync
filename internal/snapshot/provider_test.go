@@ -411,3 +411,20 @@ func TestRecoverInterruptedCacheInitialization(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestLocalTransportWithoutGitExecutable(t *testing.T) {
+	remote := testutil.NewRemote(t)
+	first := remote.Commit("file", "one")
+	t.Setenv("PATH", t.TempDir())
+	for _, url := range []string{remote.Path, "file://" + remote.Path} {
+		p, err := New(Config{URL: url, Branch: "master", Root: t.TempDir()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := p.Sync(context.Background())
+		p.Close()
+		if err != nil || result.SHA != first.String() {
+			t.Fatalf("local sync depends on external Git: %+v %v", result, err)
+		}
+	}
+}
