@@ -1,145 +1,50 @@
 name: Release
-
 on:
   push:
-    tags:
-      - 'v*.*.*'
-
+    tags: ['v*.*.*']
+permissions:
+  contents: read
 jobs:
   test:
     uses: ./.github/workflows/common.yml
-
   release:
-    name: Create Release
     needs: test
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4.1.7
-
-      - name: Set up Go
-        uses: actions/setup-go@v5.0.1
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
-          go-version: '1.21'
-
-      # Build for Linux x64
-      - name: Build for Linux x64
+          go-version: '1.27.2'
+          cache: true
+      - name: Build supported publication platforms
         run: |
-          mkdir -p build/linux/x64
-          GOOS=linux GOARCH=amd64 go build -o build/linux/x64/git-sync ./cmd/
-
-      # Build for Windows x64
-      - name: Build for Windows x64
-        run: |
-          mkdir -p build/windows/x64
-          GOOS=windows GOARCH=amd64 go build -o build/windows/x64/git-sync.exe ./cmd/
-
-      # Build for OSX x64
-      - name: Build for OSX x64
-        run: |
-          mkdir -p build/osx/x64
-          GOOS=darwin GOARCH=amd64 go build -o build/osx/x64/git-sync ./cmd/
-
-      # Create tar.gz archive for Linux x64
-      - name: Create tar.gz for Linux x64
-        run: |
-          tar -czvf build/git-sync-linux-amd64.tar.gz -C build/linux/x64 git-sync
-
-      # Create zip archive for Windows x64
-      - name: Create zip for Windows x64
-        run: |
-          zip -j build/git-sync-windows-x64.zip build/windows/x64/git-sync.exe
-
-      # Create tar.gz archive for OSX x64
-      - name: Create tar.gz for OSX x64
-        run: |
-          tar -czvf build/git-sync-osx-x64.tar.gz -C build/osx/x64 git-sync
-
-
-      # Extract release notes from CHANGELOG.md
-      - name: Extract release notes
-        id: extract_release_notes
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          awk '/## \['"$VERSION"'\]/,/^## \[/' CHANGELOG.md | sed '$d' > release_notes.md
-          if [ ! -s release_notes.md ]; then
-            awk '/## \['"$VERSION"'\]/,/^$/' CHANGELOG.md > release_notes.md
-          fi
-
-      # Create a new release
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1.1.4
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
-          body_path: ./release_notes.md
-          draft: false
-          prerelease: false
+          mkdir -p build
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags='-s -w' -o build/git-sync ./cmd/
+            tar -czf "build/git-sync-linux-${arch}.tar.gz" -C build git-sync
+          done
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags='-s -w' -o build/git-sync ./cmd/
+          tar -czf build/git-sync-darwin-arm64.tar.gz -C build git-sync
+          rm build/git-sync
+          cd build
+          sha256sum *.tar.gz > SHA256SUMS
+      - name: Publish release artifacts
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Upload artifacts to release
-      - name: Upload Linux x64 to release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/git-sync-linux-amd64.tar.gz
-          asset_name: git-sync-linux-amd64.tar.gz
-          asset_content_type: application/gzip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Windows x64 to release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/git-sync-windows-x64.zip
-          asset_name: git-sync-windows-x64.zip
-          asset_content_type: application/zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload OSX x64 to release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/git-sync-osx-x64.tar.gz
-          asset_name: git-sync-osx-x64.tar.gz
-          asset_content_type: application/gzip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Docker release
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Login docker registry
-      - name: Log in to Docker Hub
-        if: success() && startsWith(github.ref, 'refs/tags/')
-        uses: docker/login-action@v3
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" build/*.tar.gz build/SHA256SUMS --generate-notes --verify-tag
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/login-action@v4.6.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-
-      # Build and push Docker image
-      - name: Build and push Docker image
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7.4.0
         with:
           context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             xt10r/git-sync:latest
             xt10r/git-sync:${{ github.ref_name }}
-
-      # Clean Docker images
-      - name: Clean up
-        run: |
-          docker image prune -f

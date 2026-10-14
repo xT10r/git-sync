@@ -1,3 +1,16 @@
+# Unreleased — snapshot-provider redesign (breaking)
+
+- Publish immutable snapshots by commit SHA with a service-owned cache and atomic current pointer.
+- Preserve last-good on failure; recover publication on restart; lock roots against multiple writers.
+- Separate typed configuration, sequential worker, HTTP lifecycle and bounded-label metrics.
+- Add offline fixtures, failure/recovery/reader/auth tests and a SIGTERM subprocess test.
+- Require Go 1.26+; update dependencies and use a non-root static container image.
+- Remove legacy public Go packages and unfinished daemon/API stubs.
+- Migration requires a fresh root and reader/dashboard updates. Windows runtime, NFS guarantees,
+  SSH/LFS/symlinks/submodules, automatic snapshot retention and cache corruption repair are not implemented.
+
+---
+
 <!--
  Copyright 2024 Aleksey Dobshikov
  

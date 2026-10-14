@@ -1,39 +1,35 @@
-name: Common Actions
-
-on: 
+name: Common checks
+on:
   workflow_call:
-
+permissions:
+  contents: read
 jobs:
   test:
-    name: Run Tests
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        go: ['1.26.9', '1.27.2']
     steps:
-      # Checkout the repository
-      - name: Checkout code
-        uses: actions/checkout@v4.1.7
-
-      # Set up Go environment
-      - name: Set up Go
-        uses: actions/setup-go@v5.0.1
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
         with:
-          go-version: '1.21'
-
-      # Cache Go modules
-      - name: Cache Go modules
-        uses: actions/cache@v4
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: Check formatting
+        run: test -z "$(gofmt -l cmd internal)"
+      - run: go vet ./...
+      - run: go test -race -count=2 -coverprofile=coverage.out ./...
+      - name: Scan reachable vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          govulncheck ./...
+      - name: Build binary
+        run: CGO_ENABLED=0 go build -trimpath -o build/git-sync ./cmd/
+      - name: Cross-compile
+        run: |
+          GOOS=darwin GOARCH=arm64 go build -o build/git-sync-darwin-arm64 ./cmd/
+          GOOS=windows GOARCH=amd64 go build -o build/git-sync-windows-amd64.exe ./cmd/
+      - uses: actions/upload-artifact@v7.0.2
         with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-
-      # Install dependencies
-      - name: Install dependencies
-        run: go mod download
-
-      # Run tests
-      - name: Run tests
-        run: go test -cover ./...
+          name: coverage-go-${{ matrix.go }}
+          path: coverage.out

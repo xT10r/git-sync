@@ -1,0 +1,61 @@
+name: Container smoke
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Build container
+        run: docker build -t git-sync:smoke .
+      - name: Publish, update, preserve last-good and stop
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/git-sync-fixture"
+          root="$RUNNER_TEMP/git-sync-root"
+          mkdir -p "$fixture" "$root"
+          git -C "$fixture" init -b main
+          git -C "$fixture" config user.name Fixture
+          git -C "$fixture" config user.email fixture@example.invalid
+          echo one > "$fixture/config"
+          git -C "$fixture" add config
+          git -C "$fixture" commit -m initial
+          chmod -R a+rX "$fixture"
+          sudo chown 65532:65532 "$root"
+          docker run -d --name git-sync-smoke --read-only \
+            -v "$fixture:/fixture:ro" -v "$root:/git" \
+            -p 127.0.0.1:18080:8080 \
+            -e GITSYNC_REPOSITORY_URL=/fixture \
+            -e GITSYNC_INTERVAL=100ms git-sync:smoke
+          trap 'docker logs git-sync-smoke; docker rm -f git-sync-smoke' EXIT
+          wait_content() {
+            for attempt in {1..100}; do
+              if [[ "$(cat "$root/current/config" 2>/dev/null || true)" == "$1" ]]; then return; fi
+              sleep 0.1
+            done
+            return 1
+          }
+          wait_content one
+          curl --fail http://127.0.0.1:18080/readyz
+          old_snapshot="$(readlink "$root/current")"
+          echo two > "$fixture/config"
+          git -C "$fixture" add config
+          git -C "$fixture" commit -m update
+          chmod -R a+rX "$fixture"
+          wait_content two
+          test "$(cat "$root/$old_snapshot/config")" = one
+          git -C "$fixture" update-ref -d refs/heads/main
+          for attempt in {1..100}; do
+            if curl --fail -s http://127.0.0.1:18080/status | grep -q '"degraded":true'; then break; fi
+            sleep 0.1
+          done
+          curl --fail -s http://127.0.0.1:18080/status | grep -q '"degraded":true'
+          test "$(cat "$root/current/config")" = two
+          docker stop --time 10 git-sync-smoke
+          test "$(docker inspect -f '{{.State.ExitCode}}' git-sync-smoke)" = 0

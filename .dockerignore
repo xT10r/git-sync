@@ -1,4 +1,6 @@
+.git
 .idea
+.vscode
+build
+coverage.out
 *.iml
-/README.md
-/LICENSE

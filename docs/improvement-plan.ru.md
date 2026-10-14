@@ -1,9 +1,19 @@
 # План доработки Git-Sync
 
-Дата: 2026-10-14. Статус: план, реализация не начата.
+Дата: 2026-10-14. Статус: базовая реализация поставщика снимков подготовлена в feature/git-sync-reliability; проверяется перед выпуском.
 
 База: `main`, коммит `57fa43e1708c7fd73f5c9c7a968bdd4454abf673`.
 Ветка: `feature/git-sync-reliability`. Изменения из `develop` не включены.
+
+## Выполнено в текущей ветке
+
+- Исправлена исходная тестовая база; затем заменена проверками нового единственного пути исполнения.
+- Реализованы typed config, отдельный worker/HTTP, Git cache, подготовка снимков по SHA, atomic current, last-good, root lock и restart recovery.
+- Удалены прежние Pull/reset pipeline и незавершённые api/daemon, globals и ненужные зависимости.
+- Обновлены Go/dependencies, Dockerfile и CI/release; исправлены обе версии README и описана несовместимая миграция.
+- Добавлены локальные Git/HTTP fixtures, force-push/новый SHA/reader consistency/failure/auth/recovery тесты и subprocess SIGTERM.
+
+Ограничения этой поставки: готовые snapshots сохраняются без автоматической очистки; backoff/jitter, SSH/LFS/submodules/symlinks, Windows runtime и гарантии NFS не реализованы. Windows только кросс-компилируется. Docker/Kubernetes runtime надо проверить в среде с container engine. Подробные фактические результаты — [verification.ru.md](verification.ru.md). Дальнейшие пункты ниже описывают целевой объём; наличие пункта не означает, что все его подпункты уже выполнены.
 
 ## Основание плана
 
