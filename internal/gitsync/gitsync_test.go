@@ -1,21 +1,9 @@
-// Copyright 2024 Aleksey Dobshikov
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package gitsync_test
 
 import (
 	"context"
+	"git-sync/git"
+	"git-sync/internal/constants"
 	"git-sync/internal/gitsync"
 	"git-sync/internal/handlers"
 	"git-sync/mock"
@@ -23,56 +11,56 @@ import (
 	"time"
 )
 
+type observedRepo struct {
+	mock.Gitter
+	calls chan struct{}
+}
+
+func (r *observedRepo) Sync() error { r.calls <- struct{}{}; return nil }
+func (r *observedRepo) Commit() (*git.CommitInfo, error) {
+	return &git.CommitInfo{Hash: "fixture", Date: time.Unix(1700000000, 0)}, nil
+}
 func TestStart(t *testing.T) {
-
-	ctx := context.Background()
-
-	// Создаем макет флагов для использования в тесте
-	mockFlags := mock.Flags()
-
-	// Парсим флаги
-	err := mockFlags.Parse(nil)
-	if err != nil {
-		t.Fatalf("error parsing flags: %v", err)
-	}
-
-	// Создаем фейковый контекст с отменой через 100 миллисекунд
-	fakeCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	defer cancel()
-
-	// Создаем экземпляр gitsync с использованием макета флагов и фейкового контекста
-	gitSync, err := gitsync.NewGitSync(mockFlags, fakeCtx)
-	if err != nil {
-		t.Fatalf("Error initializing GitSync: %v", err)
-	}
-
-	// Создаем мок Gitter
-	mockGitter := &mock.Gitter{}
-
-	// Запуск синхронизации в отдельной горутине
-	go gitSync.Start(mockGitter)
-
-	// Отправляем сообщение в канал вебхуков для проверки второй ветки select
-	go func() {
-		handlers.WebhookCh <- "127.0.0.1"
-	}()
-
-	// Ждем некоторое время для проверки, что синхронизация запущена и остановлена
-	time.Sleep(200 * time.Millisecond)
-
-	// Проверяем, что контекст завершился (первая ветка select)
-	select {
-	case <-gitSync.GetCtx().Done():
-		// Контекст успешно завершен
-	default:
-		t.Error("Context was not cancelled as expected")
-	}
-
-	// Ждем тикера (третья ветка select)
-	time.Sleep(1000 * time.Millisecond)
-
-	// Проверяем, что все случаи были покрыты
-	if len(handlers.WebhookCh) != 0 {
-		t.Error("Webhook channel was not emptied as expected")
+	for _, mode := range []string{"webhook", "periodic"} {
+		t.Run(mode, func(t *testing.T) {
+			handlers.WebhookCh = make(chan string, 1)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			fs := mock.Flags()
+			if mode == "periodic" {
+				if err := fs.Set(constants.FlagSyncInterval, "5ms"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			service, err := gitsync.NewGitSync(fs, ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo := &observedRepo{calls: make(chan struct{}, 100)}
+			done := make(chan struct{})
+			go func() { defer close(done); service.Start(repo) }()
+			t.Cleanup(func() {
+				cancel()
+				select {
+				case <-done:
+				case <-time.After(2 * time.Second):
+					t.Error("worker did not stop")
+				}
+			})
+			if mode == "webhook" {
+				handlers.WebhookCh <- "127.0.0.1"
+			}
+			select {
+			case <-repo.calls:
+			case <-time.After(2 * time.Second):
+				t.Fatal("sync not invoked")
+			}
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("worker did not stop")
+			}
+		})
 	}
 }

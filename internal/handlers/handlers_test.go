@@ -24,17 +24,14 @@ import (
 	"testing"
 	"time"
 
+	"git-sync/internal/metrics"
 	"github.com/prometheus/common/expfmt"
 )
 
 func TestWebhookHandlerFunc(t *testing.T) {
 
-	defer func() {
-		close(handlers.WebhookCh) // Закрываем канал после отправки данных
-	}()
-
-	// Ждем некоторое время для запуска сервера.
-	time.Sleep(100 * time.Millisecond)
+	handlers.WebhookCh = make(chan string, 1)
+	t.Cleanup(func() { handlers.WebhookCh = make(chan string, 1) })
 
 	// Создаем запрос для передачи в наш обработчик.
 	req, err := http.NewRequest("GET", "http://localhost:8080/webhook", nil)
@@ -78,6 +75,7 @@ func TestWebhookHandlerFunc(t *testing.T) {
 }
 
 func TestMetricsHandler(t *testing.T) {
+	metrics.SyncTotalCount.Inc()
 	req, err := http.NewRequest("GET", "/metrics", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +104,7 @@ func TestMetricsHandler(t *testing.T) {
 	}
 
 	// Проверяем наличие нужной метрики в коллекции
-	expectedMetric := "go_info"
+	expectedMetric := "git_sync_sync_total_count"
 	if _, ok := metricFamilies[expectedMetric]; !ok {
 		t.Errorf("handler response does not contain expected metric %q", expectedMetric)
 	}

@@ -18,9 +18,9 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"git-sync/internal/constants"
 	"git-sync/logger"
-	"log"
-	"os"
+	"io"
 	"regexp"
 	"testing"
 	"time"
@@ -56,8 +56,7 @@ func TestGetEnv(t *testing.T) {
 	// Выполнение тестов
 	for _, tc := range testCases {
 		t.Run(tc.envKey, func(t *testing.T) {
-			os.Setenv(tc.envKey, tc.envValue)
-			defer os.Unsetenv(tc.envKey)
+			t.Setenv(tc.envKey, tc.envValue)
 			value := getEnv(tc.envKey, tc.expected)
 			if value != tc.expected {
 				t.Errorf("Expected '%s', got '%s'", tc.expected, value)
@@ -84,8 +83,7 @@ func TestGetEnvDuration(t *testing.T) {
 	// Выполнение тестов
 	for _, tc := range testCases {
 		t.Run(tc.envKey, func(t *testing.T) {
-			os.Setenv(tc.envKey, tc.envValue)
-			defer os.Unsetenv(tc.envKey)
+			t.Setenv(tc.envKey, tc.envValue)
 			value := getEnvDuration(tc.envKey, tc.expected)
 			if value != tc.expected {
 				t.Errorf("Expected '%s', got '%s'", tc.expected, value)
@@ -204,7 +202,7 @@ func TestValidateFlagOptional(t *testing.T) {
 			// Перехватываем вывод логгера
 			var buf bytes.Buffer
 			logger.GetLogger().SetOutput(&buf)
-			defer log.SetOutput(nil) // Восстанавливаем вывод логгера
+			defer logger.GetLogger().SetOutput(io.Discard) // Восстанавливаем вывод логгера
 
 			validateFlagOptional(fs, tt.flagName, tt.desc)
 
@@ -233,14 +231,23 @@ func TestValidateFlagSyncInterval(t *testing.T) {
 }
 
 func TestValidateFlagsHttpServer(t *testing.T) {
-	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-	fs.String("httpServerAddr", "127.0.0.1:8080", "")
-	fs.String("httpServerAuthUsername", "user", "")
-	fs.String("httpServerAuthPassword", "pass", "")
-	fs.String("httpServerAuthToken", "token", "")
-
-	err := validateFlagsHttpServer(fs)
-	if err != nil {
-		t.Errorf("Expected no error, got '%s'", err)
+	for _, tc := range []struct {
+		name, addr string
+		wantError  bool
+	}{
+		{"disabled", "", false}, {"valid", "127.0.0.1:8080", false},
+		{"invalid IP", "invalid:8080", true}, {"invalid port", "127.0.0.1:99999", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := flag.NewFlagSet("test", flag.ContinueOnError)
+			fs.String(constants.FlagHttpServerAddr, tc.addr, "")
+			fs.String(constants.FlagHttpServerAuthUsername, "user", "")
+			fs.String(constants.FlagHttpServerAuthPassword, "pass", "")
+			fs.String(constants.FlagHttpServerAuthToken, "", "")
+			err := validateFlagsHttpServer(fs)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("error = %v, wantError %v", err, tc.wantError)
+			}
+		})
 	}
 }
